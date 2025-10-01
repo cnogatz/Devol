@@ -1,0 +1,330 @@
+<script>
+(function () {
+  // ---------- Utils ----------
+  function $(sel){ return document.querySelector(sel); }
+  function $all(sel){ return Array.from(document.querySelectorAll(sel)); }
+  function setMsg(el, text, cls){ if(!el) return; el.textContent = text || ''; el.className = cls || ''; }
+  function getPIN(){ return sessionStorage.getItem('userPin') || ''; }
+  function setUser(pin, nome){ sessionStorage.setItem('userPin', pin||''); sessionStorage.setItem('userNome', nome||''); }
+
+  function showOnly(sectionId){
+    $all('.pageSection').forEach(s => s.style.display = 'none');
+    const menu = $('#menuSection'); if (menu) menu.style.display = 'block';
+    if (sectionId) {
+      const sec = document.getElementById(sectionId);
+      if (sec) sec.style.display = 'block';
+    }
+  }
+
+  // ---------- LOGIN ----------
+  function bindLogin(){
+    const btn = $('#btnEntrar');
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+      const pin = ($('#pinInput')?.value || '').trim();
+      const msg = $('#loginMsg');
+      if (pin.length !== 6){ setMsg(msg, 'Informe um PIN de 6 dígitos.', 'err'); return; }
+      setMsg(msg, 'Verificando...', '');
+
+      google.script.run
+        .withSuccessHandler(function (data){
+          if (data && data.ok){
+            setUser(data.pin, data.nome || '');
+            setMsg(msg, 'Bem-vindo, ' + (data.nome || 'usuário') + '!', 'ok');
+            const login = $('#loginSection'); if (login) login.style.display = 'none';
+            showOnly('uploadSection');
+          } else {
+            setMsg(msg, (data && data.message) || 'PIN inválido.', 'err');
+          }
+        })
+        .withFailureHandler(function (err){
+          setMsg(msg, 'Erro de conexão', 'err');
+          console.error('apiLoginServer error:', err);
+        })
+        .apiLoginServer(pin);
+    });
+  }
+
+  // ---------- UPLOAD ----------
+  function bindUpload(){
+    const btn = $('#btnUpload');
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+      const pin = getPIN();
+      const xml = ($('#xmlText')?.value || '').trim();
+      const msg = $('#uploadMsg');
+      if (!pin){ setMsg(msg, 'Faça login primeiro.', 'err'); return; }
+      if (!xml){ setMsg(msg, 'Cole um XML antes de enviar.', 'err'); return; }
+      setMsg(msg, 'Enviando...', '');
+
+      google.script.run
+        .withSuccessHandler(function (data){
+          if (data && data.ok){
+            const n = (data.created || []).length;
+            setMsg(msg, `Importado com sucesso (${n} registro).`, 'ok');
+          } else {
+            setMsg(msg, (data && (data.message || data.code)) || 'Falha ao importar.', 'err');
+          }
+        })
+        .withFailureHandler(function (err){
+          setMsg(msg, 'Erro de conexão', 'err');
+          console.error('apiUploadServer error:', err);
+        })
+        .apiUploadServer(xml, pin);
+    });
+  }
+
+  // ---------- LISTA ----------
+  function bindLista(){
+    const btn = $('#btnAtualizarLista');
+    if (!btn) return;
+
+    btn.addEventListener('click', function(){
+      const pin = getPIN();
+      const table = $('#listaTable');
+      if (table) table.innerHTML = '<tr><td>Carregando...</td></tr>';
+      if (!pin) { if (table) table.innerHTML = '<tr><td>Faça login primeiro.</td></tr>'; return; }
+
+      google.script.run
+        .withSuccessHandler(function (data) {
+          if (!(data && data.ok)) {
+            if (table) table.innerHTML = '<tr><td>Falha: ' + ((data && data.message) || (data && data.code) || 'erro') + '</td></tr>';
+            return;
+          }
+
+          if (table) table.innerHTML = '<tr><th>Chave</th><th>Emissão</th><th>Emitente</th><th>Valor</th><th>Status</th><th>Ação</th></tr>';
+          (data.rows || []).forEach(function (r) {
+            const tr = document.createElement('tr');
+
+            // tenta várias variantes de coluna de ID
+            const recId =
+              r.ID ||
+              r.Id ||
+              r.id ||
+              r['Id'] ||
+              r['ID_RegistroBase'] ||
+              r['ID RegistroBase'] ||
+              r['ID Registro Base'] ||
+              '';
+
+            const emissao = (r.Emissao instanceof Date) ? r.Emissao.toISOString() : (r.Emissao || '');
+            tr.innerHTML = `
+              <td>${r.ChaveNFe||''}</td>
+              <td>${emissao}</td>
+              <td>${r.Emitente_Nome||''}</td>
+              <td>${r.ValorNF||''}</td>
+              <td>${r.Status||''}</td>
+              <td><button class="btnDetalhar" type="button" data-id="${recId}">Detalhar</button></td>`;
+            table.appendChild(tr);
+          });
+
+          // liga os botões Detalhar
+          table.querySelectorAll('.btnDetalhar').forEach(btn2 => {
+            btn2.addEventListener('click', () => {
+              const id = btn2.dataset.id || '';
+              console.log('Detalhar clique → id:', id);
+              if (!id) {
+                alert('Não foi possível identificar o ID desta nota. Verifique o nome da coluna de ID na aba Base.');
+                return;
+              }
+              abrirDetalhe(id);
+            });
+          });
+        })
+        .withFailureHandler(function (err) {
+          console.error('apiListarServer FAIL →', err);
+          if (table) table.innerHTML = '<tr><td>Erro de conexão</td></tr>';
+        })
+        .apiListarServer(pin);
+    });
+  }
+
+  // ---------- DETALHE ----------
+  function abrirDetalhe(id){
+  const pin = getPIN();
+  const sec = $('#detalheSection');
+  const msg = $('#detalheMsg');
+
+  if (!id) { alert('ID vazio para detalhar.'); return; }
+
+  // prepara e MOSTRA a tela de detalhe antes da chamada
+  if (sec) sec.dataset.id = id;
+  $('#detalheInfo').innerHTML = '';
+  $('#itensTable').innerHTML = '';
+  document.getElementsByName('statusNota').forEach?.(r => r.checked = false);
+  const pg = $('#pagamentoBox'); if (pg) pg.style.display = 'none';
+  const obs = $('#obsNota'); if (obs) obs.value = '';
+  showOnly('detalheSection');
+  setMsg(msg, 'Carregando...', '');
+
+  google.script.run
+    .withSuccessHandler(function (data) {
+      console.log('apiDetalharServer →', data); // <— log completo
+
+if (!(data && data.ok)) {
+  const errTxt = data
+    ? ((data.code ? `[${data.code}] ` : '') + (data.message || 'Falha ao detalhar'))
+    : 'Falha ao detalhar (resposta nula)';
+  setMsg(msg, errTxt, 'err');
+  console.error('Detalhar FAIL →', data);
+  return;
+}
+
+      const b = data.base || {};
+      $('#detalheInfo').innerHTML =
+        `<b>Chave:</b> ${b.ChaveNFe||''} &nbsp; <b>Nº:</b> ${b.Numero||''} &nbsp; <b>Série:</b> ${b.Serie||''}
+         <br><b>Emitente:</b> ${b.Emitente_Nome||''} &nbsp; <b>Dest:</b> ${b.Destinatario_Nome||''}
+         <br><b>CFOP:</b> ${b.CFOP||''} &nbsp; <b>Valor:</b> ${b.ValorNF||''}`;
+
+      const tb = $('#itensTable');
+      tb.innerHTML = `<tr><th>Seq</th><th>Código</th><th>Descrição</th><th>Qtd</th>
+                      <th>Status</th><th>Motivo</th><th>Qtde Devolvida</th><th>Obs</th></tr>`;
+
+      const itens = data.itens || [];
+      itens.forEach(function (it) {
+        // pega seq de forma tolerante (Seq, nItem, etc.)
+        const seq = it.Seq ?? it.SEQ ?? it.nItem ?? it['nItem'] ?? it['seq'] ?? '';
+        const tr = document.createElement('tr');
+        tr.dataset.seq = seq;
+        tr.innerHTML = `
+          <td>${seq||''}</td>
+          <td>${it.Codigo||it.codigo||''}</td>
+          <td>${it.Descricao||it.descricao||''}</td>
+          <td>${it.Quantidade||it.quantidade||''}</td>
+          <td>
+            <select class="statusItem">
+              <option ${it.StatusItem==='Pendente'?'selected':''}>Pendente</option>
+              <option ${it.StatusItem==='Aceito'?'selected':''}>Aceito</option>
+              <option ${it.StatusItem==='Recusado'?'selected':''}>Recusado</option>
+            </select>
+          </td>
+          <td>
+            <select class="motivoItem">
+              <option value="">(selecione)</option>
+              <option ${it.MotivoItem==='Bolor'?'selected':''}>Bolor</option>
+              <option ${it.MotivoItem==='Shelf'?'selected':''}>Shelf</option>
+              <option ${it.MotivoItem==='Embalagem estufada'?'selected':''}>Embalagem estufada</option>
+              <option ${it.MotivoItem==='Avaria na loja'?'selected':''}>Avaria na loja</option>
+            </select>
+          </td>
+          <td><input class="qtdeDev" type="number" step="0.01" value="${it.QtdeDevolvida||''}"></td>
+          <td><input class="obsItem" type="text" value="${it.ObsItem||''}"></td>`;
+        tb.appendChild(tr);
+      });
+
+      // Se vier 0 itens, mostra aviso útil
+      if (itens.length === 0) {
+        const baseId = (b.ID || b.Id || b.id || id);
+        setMsg(
+          msg,
+          'Nenhum item vinculado a este registro. Confirme na aba "Itens" se existe a coluna ' +
+          '"ID_RegistroBase" (ou "ID") com o valor: ' + baseId,
+          'err'
+        );
+      } else {
+        setMsg(msg, '', '');
+      }
+
+      // mantém id real enviado pelo backend (caso diferente do usado no botão)
+      if (b.ID && sec) sec.dataset.id = b.ID;
+    })
+    .withFailureHandler(function (err) {
+      console.error('apiDetalharServer FAIL →', err);
+      setMsg(msg, 'Erro de conexão', 'err');
+    })
+    .apiDetalharServer2(id, pin);
+}
+  // alterna pagamento quando marcar "Aceita"
+  document.addEventListener('change', function (e) {
+    if (e.target && e.target.name === 'statusNota') {
+      const box = $('#pagamentoBox');
+      if (box) box.style.display = (e.target.value === 'Aceita') ? 'block' : 'none';
+    }
+  });
+
+  // Salvar validação
+  const btnSalvar = $('#btnSalvarValidacao');
+  if (btnSalvar) {
+    btnSalvar.addEventListener('click', function () {
+      const pin = getPIN();
+      const sec = $('#detalheSection');
+      const id  = sec?.dataset.id || '';
+      const msg = $('#detalheMsg');
+
+      const statusNota = (Array.from(document.getElementsByName('statusNota')).find(r => r.checked) || {}).value || '';
+      if (!statusNota) { setMsg(msg, 'Selecione Aceitar ou Recusar a nota.', 'err'); return; }
+      if (statusNota === 'Recusada' && !$('#obsNota').value.trim()) {
+        setMsg(msg, 'Observações da nota são obrigatórias quando Recusada.', 'err'); return;
+      }
+
+      const itens = Array.from($('#itensTable').querySelectorAll('tr')).slice(1).map(tr => ({
+        seq: parseInt(tr.dataset.seq, 10),
+        statusItem: tr.querySelector('.statusItem').value || 'Pendente',
+        motivoItem: tr.querySelector('.motivoItem').value || '',
+        qtdeDevolvida: tr.querySelector('.qtdeDev').value || '',
+        obsItem: tr.querySelector('.obsItem').value || ''
+      }));
+
+      const payload = {
+        id,
+        status: statusNota,
+        formaPagamento: $('#formaPagamento').value || '',
+        dataPagamento: $('#dataPagamento').value || '',
+        observacoes: $('#obsNota').value || '',
+        validadorNome: (sessionStorage.getItem('userNome') || ''),
+        itens
+      };
+
+      setMsg(msg, 'Salvando...', '');
+      google.script.run
+        .withSuccessHandler(function (data) {
+          setMsg(msg, (data && data.ok) ? 'Validação salva!' : ((data && (data.message || data.code)) || 'Falha ao salvar'), (data && data.ok) ? 'ok' : 'err');
+        })
+        .withFailureHandler(function (err) {
+          console.error('apiValidarServer FAIL →', err);
+          setMsg(msg, 'Erro de conexão', 'err');
+        })
+        .apiValidarServer(payload, pin);
+    });
+  }
+
+  // Voltar para lista
+  const btnVoltar = $('#btnVoltarLista');
+  if (btnVoltar) {
+    btnVoltar.addEventListener('click', function () {
+      showOnly('listaSection');
+    });
+  }
+
+  // ---------- MENU / LOGOUT ----------
+  function bindMenu(){
+    $all('#menuSection [data-section]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.getAttribute('data-section') + 'Section';
+        showOnly(target);
+      });
+    });
+    const out = $('#btnLogout');
+    if (out) out.addEventListener('click', () => {
+      sessionStorage.clear();
+      location.reload();
+    });
+  }
+
+  // ---------- Bootstrap ----------
+  document.addEventListener('DOMContentLoaded', function(){
+    bindLogin();
+    bindUpload();
+    bindLista();
+    bindMenu();
+    if (getPIN()){
+      const login = $('#loginSection'); if (login) login.style.display = 'none';
+      showOnly('uploadSection');
+    } else {
+      const login = $('#loginSection'); if (login) login.style.display = 'block';
+      const menu = $('#menuSection'); if (menu) menu.style.display = 'none';
+      $all('.pageSection').forEach(s => s.style.display = 'none');
+    }
+  });
+})();
+</script>

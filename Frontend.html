@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <base target="_top">
+    <title>Devoluções NFe</title>
+    <?!= include('FrontendCSS'); ?>
+  </head>
+  <body>
+    <div id="app">
+      <!-- Seção de login -->
+      <div id="loginSection">
+        <h2>Login - Informe seu PIN</h2>
+        <input id="pinInput" type="text" maxlength="6" placeholder="PIN de 6 dígitos" />
+        <!-- O PIN é pré-definido na aba Users, então este botão pode ficar oculto -->
+        <button id="btnGerarPin" type="button" style="display:none">Gerar Novo PIN</button>
+        <button id="btnEntrar" type="button">Entrar</button>
+        <div id="loginMsg"></div>
+      </div>
+
+      <!-- Menu principal -->
+      <div id="menuSection" style="display:none; margin-top:20px;">
+        <button data-section="upload">Upload</button>
+        <button data-section="lista">Lista</button>
+        <button data-section="dashboard">Dashboard</button>
+        <button data-section="atividades">Minhas Atividades</button>
+        <button id="btnLogout" type="button" style="float:right;">Sair</button>
+      </div>
+
+      <!-- Seção de Upload -->
+      <div id="uploadSection" class="pageSection" style="display:none;">
+        <h3>Enviar XML de devolução</h3>
+        <p>Copie e cole o conteúdo do XML abaixo (somente um por vez nesta versão).</p>
+        <textarea id="xmlText" rows="12" placeholder="Cole aqui o XML completo"></textarea>
+        <br />
+        <button id="btnUpload" type="button">Importar XML</button>
+        <div id="uploadMsg" style="margin-top:10px;"></div>
+      </div>
+
+      <!-- Seção de Lista -->
+      <div id="listaSection" class="pageSection" style="display:none;">
+        <h3>Lista de notas</h3>
+        <button id="btnAtualizarLista" type="button">Atualizar Lista</button>
+        <table id="listaTable"></table>
+      </div>
+
+      <!-- Seção de Dashboard -->
+      <div id="dashboardSection" class="pageSection" style="display:none;">
+        <h3>Dashboard Geral</h3>
+        <div id="dashboardContent"></div>
+        <h3>Meu Dashboard</h3>
+        <div id="dashboardPessoalContent"></div>
+      </div>
+
+      <!-- Seção de Minhas Atividades -->
+      <div id="atividadesSection" class="pageSection" style="display:none;">
+        <h3>Minhas Atividades</h3>
+        <button data-type="uploads" type="button">Meus Uploads</button>
+        <button data-type="validacoes" type="button">Minhas Validações</button>
+        <table id="atividadesTable"></table>
+      </div>
+    </div>
+
+
+<!-- Detalhe / Validação -->
+<div id="detalheSection" class="pageSection" style="display:none;">
+  <h3>Detalhe da Nota</h3>
+  <div id="detalheInfo"></div>
+
+  <div style="margin:10px 0;">
+    <label><input type="radio" name="statusNota" value="Aceita"> Aceitar nota</label>
+    <label style="margin-left:12px;"><input type="radio" name="statusNota" value="Recusada"> Recusar nota</label>
+  </div>
+
+  <div id="pagamentoBox" style="display:none;">
+    <label>Forma de pagamento:
+      <select id="formaPagamento">
+        <option value="">Selecione</option>
+        <option>Pix</option><option>Depósito</option><option>Dinheiro</option><option>Crédito</option><option>Outros</option>
+      </select>
+    </label>
+    <label style="margin-left:8px;">Data pagamento:
+      <input type="date" id="dataPagamento">
+    </label>
+  </div>
+
+  <label>Observações da nota:
+    <input id="obsNota" type="text" placeholder="(obrigatório se Recusada)">
+  </label>
+
+  <h4>Itens</h4>
+  <table id="itensTable">
+    <tr>
+      <th>Seq</th><th>Código</th><th>Descrição</th><th>Qtd</th>
+      <th>Status</th><th>Motivo</th><th>Qtde Devolvida</th><th>Obs</th>
+    </tr>
+  </table>
+
+  <div style="margin-top:12px;">
+    <button id="btnSalvarValidacao" type="button">Salvar validação</button>
+    <button id="btnVoltarLista" type="button">Voltar</button>
+  </div>
+  <div id="detalheMsg" style="margin-top:8px;"></div>
+</div>
+
+
+
+<!-- Modal/Seção de Detalhe -->
+<div id="detalheSection" class="pageSection" style="display:none;">
+  <h3>Detalhe da Nota</h3>
+  <div id="detalheInfo"></div>
+
+  <!-- status da NOTA -->
+  <div style="margin:10px 0;">
+    <label><input type="radio" name="statusNota" value="Aceita"> Aceitar nota</label>
+    <label style="margin-left:12px;"><input type="radio" name="statusNota" value="Recusada"> Recusar nota</label>
+  </div>
+
+  <!-- campos extras (só se Aceita) -->
+  <div id="pagamentoBox" style="display:none;">
+    <label>Forma de pagamento:
+      <select id="formaPagamento">
+        <option value="">Selecione</option>
+        <option>Pix</option><option>Depósito</option><option>Dinheiro</option><option>Crédito</option><option>Outros</option>
+      </select>
+    </label>
+    <label style="margin-left:8px;">Data pagamento: <input type="date" id="dataPagamento"></label>
+    <br/>
+  </div>
+
+  <label>Observações da nota:
+    <input id="obsNota" type="text" placeholder="(obrigatório se Recusada)">
+  </label>
+
+  <h4>Itens</h4>
+  <table id="itensTable">
+    <tr>
+      <th>Seq</th><th>Código</th><th>Descrição</th><th>Qtd</th><th>Status</th><th>Motivo</th><th>Qtde Devolvida</th><th>Obs</th>
+    </tr>
+    <!-- linhas geradas via JS -->
+  </table>
+
+  <div style="margin-top:12px;">
+    <button id="btnSalvarValidacao" type="button">Salvar validação</button>
+    <button id="btnVoltarLista" type="button">Voltar</button>
+  </div>
+  <div id="detalheMsg" style="margin-top:8px;"></div>
+</div>
+
+
+    <?!= HtmlService.createHtmlOutputFromFile('FrontendJS').getContent(); ?>
+
+  </body>
+</html>
