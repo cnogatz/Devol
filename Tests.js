@@ -5,7 +5,7 @@
  * de registros e listagem. Execute runTests() no editor do Apps
  * Script para verificar os resultados no log.
  */
-
+//teste
 function runTests() {
   testParseXml();
   testSaveRecord();
