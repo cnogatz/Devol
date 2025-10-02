@@ -7,6 +7,23 @@
  */
 const PLANILHA_ID = '1htRCNJ79wg5Nh9XmnJ46_wDLUXjztwqRRJChJclS1rU';
 
+const BASE_HEADERS = [
+  'ID','ChaveNFe','Numero','Serie','Emissao',
+  'Emitente_Nome','Emitente_CNPJ','Destinatario_Nome','Destinatario_CNPJ',
+  'CFOP','ValorNF','ValorICMS','XML_DriveURL','Status',
+  'CriadoPorCode','CriadoEm','ValidadoPorCode','ValidadorNome','ValidadoEm',
+  'FormaPagamento','DataPagamento','Anexo_DriveURL','Observacoes','AtualizadoEm'
+];
+
+const ITENS_HEADERS = [
+  'ID_RegistroBase','Seq','Codigo','Descricao','NCM','CFOP','Quantidade','VlrUnit','VlrTotal',
+  'StatusItem','MotivoItem','ObsItem','QtdeDevolvida','ValidadoPorCode_Item','ValidadoEm_Item'
+];
+
+const LOG_HEADERS = [
+  'Timestamp','UserCode','UsuarioEmail','Acao','ID_RegistroBase','SeqItem','Detalhes'
+];
+
 const Services = (function () {
 
   // ------------- Utils -------------
@@ -16,6 +33,30 @@ const Services = (function () {
   function idxByHeader_(headers) {
     const H = headers.map(h => String(h || '').trim());
     return [H, Object.fromEntries(H.map((h, i) => [h, i]))];
+  }
+
+  function ensureSheetWithHeaders_(ss, sheetName, headers) {
+    let sh = ss.getSheetByName(sheetName);
+    if (!sh) {
+      sh = ss.insertSheet(sheetName);
+    }
+    if (headers && headers.length) {
+      if (sh.getMaxColumns() < headers.length) {
+        sh.insertColumnsAfter(sh.getMaxColumns(), headers.length - sh.getMaxColumns());
+      }
+      const lastRow = sh.getLastRow();
+      if (lastRow === 0) {
+        sh.appendRow(headers);
+      } else if (lastRow === 1) {
+        const firstRowRange = sh.getRange(1, 1, 1, headers.length);
+        const values = firstRowRange.getValues()[0];
+        const hasAnyValue = values.some(v => String(v || '').trim() !== '');
+        if (!hasAnyValue) {
+          firstRowRange.setValues([headers]);
+        }
+      }
+    }
+    return sh;
   }
 
   function toNumber_(value) {
@@ -190,6 +231,8 @@ const Services = (function () {
     let sh = ss.getSheetByName(SHEET_USERS);
     if (!sh) {
       sh = ss.insertSheet(SHEET_USERS);
+    }
+    if (sh.getLastRow() === 0) {
       sh.appendRow(['PIN','NomeUsuario','Ativo']);
     }
     return sh;
@@ -546,8 +589,8 @@ function detalhar(id, userCode) {
 
   function saveRecord_(base, itens, userCode) {
     const ss = getSpreadsheet();
-    const baseSh  = ss.getSheetByName(SHEET_BASE);
-    const itensSh = ss.getSheetByName(SHEET_ITENS);
+    const baseSh  = ensureSheetWithHeaders_(ss, SHEET_BASE, BASE_HEADERS);
+    const itensSh = ensureSheetWithHeaders_(ss, SHEET_ITENS, ITENS_HEADERS);
 
     const id = Utilities.getUuid();
     const folder = DriveApp.createFolder(id);
@@ -576,8 +619,7 @@ function detalhar(id, userCode) {
   // ------------- Log -------------
   function logAction(userCode, userEmail, acao, idBase, seqItem, detalhes) {
     const ss = getSpreadsheet();
-    const sh = ss.getSheetByName(SHEET_LOG);
-    if (!sh) return;
+    const sh = ensureSheetWithHeaders_(ss, SHEET_LOG, LOG_HEADERS);
     sh.appendRow([new Date(), userCode, userEmail, acao, idBase, seqItem || '', detalhes || '']);
   }
 
