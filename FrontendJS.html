@@ -3,9 +3,15 @@
   // ---------- Utils ----------
   function $(sel){ return document.querySelector(sel); }
   function $all(sel){ return Array.from(document.querySelectorAll(sel)); }
-  function setMsg(el, text, cls){ if(!el) return; el.textContent = text || ''; el.className = cls || ''; }
+  function setMsg(el, text, cls){
+    if(!el) return;
+    el.textContent = text || '';
+    el.className = 'msg' + (cls ? ' ' + cls : '');
+  }
   function getPIN(){ return sessionStorage.getItem('userPin') || ''; }
   function setUser(pin, nome){ sessionStorage.setItem('userPin', pin||''); sessionStorage.setItem('userNome', nome||''); }
+
+  let atividadesTipoAtual = 'uploads';
 
   function showOnly(sectionId){
     $all('.pageSection').forEach(s => s.style.display = 'none');
@@ -141,100 +147,97 @@
 
   // ---------- DETALHE ----------
   function abrirDetalhe(id){
-  const pin = getPIN();
-  const sec = $('#detalheSection');
-  const msg = $('#detalheMsg');
+    const pin = getPIN();
+    const sec = $('#detalheSection');
+    const msg = $('#detalheMsg');
 
-  if (!id) { alert('ID vazio para detalhar.'); return; }
+    if (!id) { alert('ID vazio para detalhar.'); return; }
+    if (!pin) { alert('Sessão expirada. Faça login novamente.'); return; }
 
-  // prepara e MOSTRA a tela de detalhe antes da chamada
-  if (sec) sec.dataset.id = id;
-  $('#detalheInfo').innerHTML = '';
-  $('#itensTable').innerHTML = '';
-  document.getElementsByName('statusNota').forEach?.(r => r.checked = false);
-  const pg = $('#pagamentoBox'); if (pg) pg.style.display = 'none';
-  const obs = $('#obsNota'); if (obs) obs.value = '';
-  showOnly('detalheSection');
-  setMsg(msg, 'Carregando...', '');
-console.log('Detalhar ID →', id);
-console.log('Detalhar Pin →', pin);
-  google.script.run
-    .withSuccessHandler(function (data) {
-      console.log('apiDetalharServer →', data); // <— log completo
+    if (sec) sec.dataset.id = id;
+    const info = $('#detalheInfo'); if (info) info.innerHTML = '';
+    const itensTable = $('#itensTable');
+    if (itensTable) itensTable.innerHTML = '<tr><th>Seq</th><th>Código</th><th>Descrição</th><th>Qtd</th><th>Status</th><th>Motivo</th><th>Qtde Devolvida</th><th>Obs</th></tr>';
+    Array.from(document.getElementsByName('statusNota')).forEach(r => { r.checked = false; });
+    const pg = $('#pagamentoBox'); if (pg) pg.style.display = 'none';
+    const obs = $('#obsNota'); if (obs) obs.value = '';
+    showOnly('detalheSection');
+    setMsg(msg, 'Carregando...', '');
 
-if (!(data && data.ok)) {
-  const errTxt = data
-    ? ((data.code ? `[${data.code}] ` : '') + (data.message || 'Falha ao detalhar'))
-    : 'Falha ao detalhar (resposta nula)';
-  setMsg(msg, errTxt, 'err');
-  console.error('Detalhar FAIL →', data);
-  return;
-}
+    google.script.run
+      .withSuccessHandler(function (data) {
+        if (!(data && data.ok)) {
+          const errTxt = data
+            ? ((data.code ? `[${data.code}] ` : '') + (data.message || 'Falha ao detalhar'))
+            : 'Falha ao detalhar (resposta nula)';
+          setMsg(msg, errTxt, 'err');
+          console.error('Detalhar FAIL →', data);
+          return;
+        }
 
-      const b = data.base || {};
-      $('#detalheInfo').innerHTML =
-        `<b>Chave:</b> ${b.ChaveNFe||''} &nbsp; <b>Nº:</b> ${b.Numero||''} &nbsp; <b>Série:</b> ${b.Serie||''}
-         <br><b>Emitente:</b> ${b.Emitente_Nome||''} &nbsp; <b>Dest:</b> ${b.Destinatario_Nome||''}
-         <br><b>CFOP:</b> ${b.CFOP||''} &nbsp; <b>Valor:</b> ${b.ValorNF||''}`;
+        const b = data.base || {};
+        if (info) {
+          info.innerHTML =
+            `<b>Chave:</b> ${b.ChaveNFe||''} &nbsp; <b>Nº:</b> ${b.Numero||''} &nbsp; <b>Série:</b> ${b.Serie||''}` +
+            `<br><b>Emitente:</b> ${b.Emitente_Nome||''} &nbsp; <b>Dest:</b> ${b.Destinatario_Nome||''}` +
+            `<br><b>CFOP:</b> ${b.CFOP||''} &nbsp; <b>Valor:</b> ${b.ValorNF||''}`;
+        }
 
-      const tb = $('#itensTable');
-      tb.innerHTML = `<tr><th>Seq</th><th>Código</th><th>Descrição</th><th>Qtd</th>
-                      <th>Status</th><th>Motivo</th><th>Qtde Devolvida</th><th>Obs</th></tr>`;
+        const tb = $('#itensTable');
+        if (tb) {
+          tb.innerHTML = '<tr><th>Seq</th><th>Código</th><th>Descrição</th><th>Qtd</th><th>Status</th><th>Motivo</th><th>Qtde Devolvida</th><th>Obs</th></tr>';
+        }
 
-      const itens = data.itens || [];
-      itens.forEach(function (it) {
-        // pega seq de forma tolerante (Seq, nItem, etc.)
-        const seq = it.Seq ?? it.SEQ ?? it.nItem ?? it['nItem'] ?? it['seq'] ?? '';
-        const tr = document.createElement('tr');
-        tr.dataset.seq = seq;
-        tr.innerHTML = `
-          <td>${seq||''}</td>
-          <td>${it.Codigo||it.codigo||''}</td>
-          <td>${it.Descricao||it.descricao||''}</td>
-          <td>${it.Quantidade||it.quantidade||''}</td>
-          <td>
-            <select class="statusItem">
-              <option ${it.StatusItem==='Pendente'?'selected':''}>Pendente</option>
-              <option ${it.StatusItem==='Aceito'?'selected':''}>Aceito</option>
-              <option ${it.StatusItem==='Recusado'?'selected':''}>Recusado</option>
-            </select>
-          </td>
-          <td>
-            <select class="motivoItem">
-              <option value="">(selecione)</option>
-              <option ${it.MotivoItem==='Bolor'?'selected':''}>Bolor</option>
-              <option ${it.MotivoItem==='Shelf'?'selected':''}>Shelf</option>
-              <option ${it.MotivoItem==='Embalagem estufada'?'selected':''}>Embalagem estufada</option>
-              <option ${it.MotivoItem==='Avaria na loja'?'selected':''}>Avaria na loja</option>
-            </select>
-          </td>
-          <td><input class="qtdeDev" type="number" step="0.01" value="${it.QtdeDevolvida||''}"></td>
-          <td><input class="obsItem" type="text" value="${it.ObsItem||''}"></td>`;
-        tb.appendChild(tr);
-      });
+        const itens = data.itens || [];
+        itens.forEach(function (it) {
+          const seq = it.Seq ?? it.SEQ ?? it.nItem ?? it['nItem'] ?? it['seq'] ?? '';
+          const tr = document.createElement('tr');
+          tr.dataset.seq = seq;
+          tr.innerHTML = `
+            <td>${seq||''}</td>
+            <td>${it.Codigo||it.codigo||''}</td>
+            <td>${it.Descricao||it.descricao||''}</td>
+            <td>${it.Quantidade||it.quantidade||''}</td>
+            <td>
+              <select class="statusItem">
+                <option ${it.StatusItem==='Pendente'?'selected':''}>Pendente</option>
+                <option ${it.StatusItem==='Aceito'?'selected':''}>Aceito</option>
+                <option ${it.StatusItem==='Recusado'?'selected':''}>Recusado</option>
+              </select>
+            </td>
+            <td>
+              <select class="motivoItem">
+                <option value="">(selecione)</option>
+                <option ${it.MotivoItem==='Bolor'?'selected':''}>Bolor</option>
+                <option ${it.MotivoItem==='Shelf'?'selected':''}>Shelf</option>
+                <option ${it.MotivoItem==='Embalagem estufada'?'selected':''}>Embalagem estufada</option>
+                <option ${it.MotivoItem==='Avaria na loja'?'selected':''}>Avaria na loja</option>
+              </select>
+            </td>
+            <td><input class="qtdeDev" type="number" step="0.01" value="${it.QtdeDevolvida||''}"></td>
+            <td><input class="obsItem" type="text" value="${it.ObsItem||''}"></td>`;
+          if (tb) tb.appendChild(tr);
+        });
 
-      // Se vier 0 itens, mostra aviso útil
-      if (itens.length === 0) {
-        const baseId = (b.ID || b.Id || b.id || id);
-        setMsg(
-          msg,
-          'Nenhum item vinculado a este registro. Confirme na aba "Itens" se existe a coluna ' +
-          '"ID_RegistroBase" (ou "ID") com o valor: ' + baseId,
-          'err'
-        );
-      } else {
-        setMsg(msg, '', '');
-      }
+        if (itens.length === 0) {
+          const baseId = (b.ID || b.Id || b.id || id);
+          setMsg(
+            msg,
+            'Nenhum item vinculado a este registro. Confirme na aba "Itens" se existe a coluna "ID_RegistroBase" (ou "ID") com o valor: ' + baseId,
+            'err'
+          );
+        } else {
+          setMsg(msg, '', '');
+        }
 
-      // mantém id real enviado pelo backend (caso diferente do usado no botão)
-      if (b.ID && sec) sec.dataset.id = b.ID;
-    })
-    .withFailureHandler(function (err) {
-      console.error('apiDetalharServer FAIL →', err);
-      setMsg(msg, 'Erro de conexão', 'err');
-    })
-    .apiDetalharServer2(id, pin);
-}
+        if (b.ID && sec) sec.dataset.id = b.ID;
+      })
+      .withFailureHandler(function (err) {
+        console.error('apiDetalharServer FAIL →', err);
+        setMsg(msg, 'Erro de conexão', 'err');
+      })
+      .apiDetalharServer2(id, pin);
+  }
   // alterna pagamento quando marcar "Aceita"
   document.addEventListener('change', function (e) {
     if (e.target && e.target.name === 'statusNota') {
@@ -308,6 +311,9 @@ function bindMenu(){
       if (sectionName === 'dashboard' && typeof loadDashboards === 'function') {
         loadDashboards();
       }
+      if (sectionName === 'atividades' && typeof loadAtividades === 'function') {
+        loadAtividades(atividadesTipoAtual);
+      }
     });
   });
   const out = $('#btnLogout');
@@ -317,11 +323,71 @@ function bindMenu(){
   });
 }
 
+  function loadAtividades(tipo){
+    const pin = getPIN();
+    const msg = $('#atividadesMsg');
+    const table = $('#atividadesTable');
+    if (!pin){
+      setMsg(msg, 'Faça login primeiro.', 'err');
+      if (table) table.innerHTML = '';
+      return;
+    }
+    atividadesTipoAtual = tipo || 'uploads';
+    setMsg(msg, 'Carregando...', '');
+    if (table) table.innerHTML = '';
+
+    google.script.run
+      .withSuccessHandler(function(data){
+        if (!(data && data.ok)){
+          setMsg(msg, (data && (data.message || data.code)) || 'Falha ao carregar atividades.', 'err');
+          return;
+        }
+        const rows = data.rows || [];
+        if (rows.length === 0){
+          setMsg(msg, 'Nenhum registro encontrado.', '');
+          if (table) table.innerHTML = '';
+          return;
+        }
+        setMsg(msg, `${rows.length} registro(s) encontrado(s).`, 'ok');
+        if (table){
+          table.innerHTML = '<tr><th>Chave</th><th>Status</th><th>Valor</th><th>Criado em</th><th>Atualizado em</th></tr>';
+          rows.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${r.ChaveNFe||''}</td>` +
+              `<td>${r.Status||''}</td>` +
+              `<td>${r.ValorNF||''}</td>` +
+              `<td>${r.CriadoEm||''}</td>` +
+              `<td>${r.AtualizadoEm||''}</td>`;
+            table.appendChild(tr);
+          });
+        }
+      })
+      .withFailureHandler(function(err){
+        console.error('apiMinhasAtividadesServer FAIL →', err);
+        setMsg(msg, 'Erro de conexão ao carregar atividades.', 'err');
+      })
+      .apiMinhasAtividadesServer(atividadesTipoAtual, pin);
+  }
+
+  function bindAtividades(){
+    const section = $('#atividadesSection');
+    if (!section) return;
+    section.querySelectorAll('button[data-type]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tipo = btn.getAttribute('data-type') || 'uploads';
+        loadAtividades(tipo);
+      });
+    });
+  }
+
+  window.loadAtividades = loadAtividades;
+
   // ---------- Bootstrap ----------
   document.addEventListener('DOMContentLoaded', function(){
     bindLogin();
     bindUpload();
     bindLista();
+    bindAtividades();
     bindMenu();
     if (getPIN()){
       const login = $('#loginSection'); if (login) login.style.display = 'none';
