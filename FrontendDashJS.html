@@ -1,6 +1,5 @@
+<script>
 // Robust front‑end script for the Devoluções NFe dashboard.
-// This script should be included in your FrontendJS.html file via
-// <?!= HtmlService.createHtmlOutputFromFile('robust_frontend').getContent(); ?>
 // It uses Chart.js (loaded dynamically) to render charts and builds
 // a more featureful dashboard.
 
@@ -209,19 +208,52 @@
         geralContainer.textContent = 'Erro de conexão no dashboard geral.';
         console.error(err);
       })
-      .dashboard();
+      .apiDashboardServer();
     // Carrega dashboard pessoal
+    const pin = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('userPin')) || '';
     google.script.run
       .withSuccessHandler((data) => renderPersonalDashboard(pessoalContainer, data))
       .withFailureHandler((err) => {
         pessoalContainer.textContent = 'Erro de conexão no dashboard pessoal.';
         console.error(err);
       })
-      .dashboardPessoal();
+      .apiDashboardPessoalServer(pin);
   }
 
   // Inicializa quando a página estiver pronta
   document.addEventListener('DOMContentLoaded', () => {
     loadChartJs().then(loadDashboards);
+    // Botões de interação
+    document.getElementById('dashRefreshBtn')?.addEventListener('click', () => {
+      loadDashboards();
+    });
+    document.getElementById('dashExportCsvBtn')?.addEventListener('click', () => {
+      // Exporta o resumo geral como CSV simples
+      const tmp = document.createElement('a');
+      tmp.style.display = 'none';
+      document.body.appendChild(tmp);
+      google.script.run
+        .withSuccessHandler((data) => {
+          if (!data || !data.ok) { alert((data && data.message) || 'Falha ao gerar CSV'); return; }
+          const headers = ['Status','Quantidade','Valor Total'];
+          const rows = Object.keys(data.summaryStatus).map((status) => {
+            const q = data.summaryStatus[status] || 0;
+            const v = data.summaryValues[status] || 0;
+            return [status, q, v];
+          });
+          const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          tmp.href = url;
+          tmp.download = 'dashboard_resumo.csv';
+          tmp.click();
+          URL.revokeObjectURL(url);
+          document.body.removeChild(tmp);
+        })
+        .apiDashboardServer();
+    });
   });
+  // expõe para uso pelo menu em FrontendJS (typeof loadDashboards === 'function')
+  window.loadDashboards = loadDashboards;
 })();
+</script>

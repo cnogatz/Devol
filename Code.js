@@ -330,4 +330,28 @@ function apiDetalharServer2(id, pin) {
   }
 }
 
+// === Endpoints globais para Dashboard usados no Frontend ===
+function apiDashboardServer() {
+  try {
+    if (!Services || typeof Services.dashboard !== 'function') {
+      return { ok:false, code:'MISSING_SERVICE', message:'Services.dashboard não encontrado' };
+    }
+    return Services.dashboard({});
+  } catch (e) {
+    return { ok:false, code:'EXCEPTION', message:String(e && e.message || e) };
+  }
+}
+
+function apiDashboardPessoalServer(pin) {
+  try {
+    if (!pin) return { ok:false, code:'PIN_REQUIRED', message:'PIN obrigatório' };
+    if (!Services || typeof Services.dashboardPessoal !== 'function') {
+      return { ok:false, code:'MISSING_SERVICE', message:'Services.dashboardPessoal não encontrado' };
+    }
+    return Services.dashboardPessoal(pin, '');
+  } catch (e) {
+    return { ok:false, code:'EXCEPTION', message:String(e && e.message || e) };
+  }
+}
+
 

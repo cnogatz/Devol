@@ -122,7 +122,7 @@ const Services = (function () {
     }
   }
 
-  // ------------- Detalhar -------------
+ 
  // ------------- Detalhar (super-robusto + debug) -------------
 function detalhar(id, userCode) {
   try {
@@ -161,12 +161,7 @@ function detalhar(id, userCode) {
   if (v instanceof Date) v = v.toISOString();
   baseObj[h] = v;
 });
-    // e, se houver datas em itens:
-itens.forEach(item => {
-  Object.keys(item).forEach(k => {
-    if (item[k] instanceof Date) item[k] = item[k].toISOString();
-  });
-});
+
 
     // --- ITENS ---
     const itensSh = ss.getSheetByName(SHEET_ITENS);
@@ -174,7 +169,7 @@ itens.forEach(item => {
     let matchedBy = 'none';
     let itHeaders = [];
     let baseId = baseObj.ID || baseObj.Id || baseObj.id || id;
-
+    
     if (itensSh) {
       const itData = itensSh.getDataRange().getValues();
       if (itData.length) {
@@ -212,6 +207,13 @@ itens.forEach(item => {
         }
       }
     }
+
+    // Normaliza datas nos itens (após popular a lista)
+    itens.forEach(item => {
+      Object.keys(item).forEach(k => {
+        if (item[k] instanceof Date) item[k] = item[k].toISOString();
+      });
+    });
 
     return {
       ok: true,

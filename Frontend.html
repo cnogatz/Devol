@@ -47,6 +47,10 @@
       <!-- Seção de Dashboard -->
       <div id="dashboardSection" class="pageSection" style="display:none;">
         <h3>Dashboard Geral</h3>
+        <div style="margin-bottom:8px; display:flex; gap:8px; flex-wrap:wrap;">
+          <button id="dashRefreshBtn" type="button">Atualizar Dashboard</button>
+          <button id="dashExportCsvBtn" type="button">Exportar CSV (Resumo)</button>
+        </div>
         <div id="dashboardContent"></div>
         <h3>Meu Dashboard</h3>
         <div id="dashboardPessoalContent"></div>
@@ -149,6 +153,7 @@
 
 
     <?!= HtmlService.createHtmlOutputFromFile('FrontendJS').getContent(); ?>
+    <?!= HtmlService.createHtmlOutputFromFile('FrontendDashJS').getContent(); ?>
 
   </body>
 </html>
