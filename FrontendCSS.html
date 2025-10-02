@@ -35,7 +35,7 @@ input[type="text"], textarea {
 textarea {
   resize: vertical;
 }
-table {
+table { 
   border-collapse: collapse;
   width: 100%;
   margin-top: 12px;
@@ -46,9 +46,46 @@ table th, table td {
   padding: 8px;
   font-size: 12px;
 }
-table th {
+table th { 
   background-color: #4CAF50;
   color: white;
+}
+.dashboardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.chartCard {
+  background: #ffffff;
+  border-radius: 6px;
+  padding: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+.chartCard h4 {
+  margin-top: 0;
+  font-size: 15px;
+  color: #444;
+}
+.chartBox {
+  width: 100%;
+  min-height: 220px;
+}
+.dashboardResumo {
+  background: #eef6ff;
+  border: 1px solid #c6e0ff;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 24px;
+  color: #0d47a1;
+  line-height: 1.5;
+}
+.dashboardResumo strong {
+  color: #0b3d91;
+}
+.infoMsg {
+  color: #555;
+  font-size: 14px;
 }
 .pageSection {
   margin-top: 20px;

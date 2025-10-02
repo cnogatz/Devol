@@ -18,6 +18,153 @@ const Services = (function () {
     return [H, Object.fromEntries(H.map((h, i) => [h, i]))];
   }
 
+  function toNumber_(value) {
+    if (value == null || value === '') return 0;
+    if (typeof value === 'number') return value;
+    if (value instanceof Date) return value.getTime();
+    const raw = String(value).trim().replace(/\s+/g, '');
+    if (!raw) return 0;
+    if (raw.includes('.') && raw.includes(',')) {
+      return parseFloat(raw.replace(/\./g, '').replace(',', '.')) || 0;
+    }
+    if (raw.includes(',')) {
+      return parseFloat(raw.replace(',', '.')) || 0;
+    }
+    return parseFloat(raw) || 0;
+  }
+
+  function parseDate_(value) {
+    if (!value) return null;
+    if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+    if (typeof value === 'number') {
+      const d = new Date(value);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    const str = String(value).trim();
+    if (!str) return null;
+    let d = new Date(str);
+    if (!isNaN(d.getTime())) return d;
+    d = new Date(str.replace(' ', 'T'));
+    if (!isNaN(d.getTime())) return d;
+    const parts = str.split(/[\/]/);
+    if (parts.length === 3) {
+      const [dStr, mStr, yStr] = parts;
+      const dd = parseInt(dStr, 10);
+      const mm = parseInt(mStr, 10) - 1;
+      const yy = parseInt(yStr, 10);
+      if (!isNaN(dd) && !isNaN(mm) && !isNaN(yy)) {
+        const alt = new Date(yy, mm, dd);
+        return isNaN(alt.getTime()) ? null : alt;
+      }
+    }
+    return null;
+  }
+
+  function monthKey_(date) {
+    if (!(date instanceof Date) || isNaN(date.getTime())) {
+      return { key: 'Sem data', label: 'Sem data' };
+    }
+    const y = date.getFullYear();
+    const m = date.getMonth();
+    const key = y + '-' + String(m + 1).padStart(2, '0');
+    const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    return { key, label: meses[m] + '/' + y };
+  }
+
+  function collectBaseRecords_() {
+    const ss = getSpreadsheet();
+    const sh = ss.getSheetByName(SHEET_BASE);
+    if (!sh) return [];
+    const data = sh.getDataRange().getValues();
+    if (data.length <= 1) return [];
+    const headers = data[0].map(h => String(h || '').trim());
+    const rows = [];
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const obj = {};
+      let hasContent = false;
+      headers.forEach((h, idx) => {
+        const val = row[idx];
+        if (val !== '' && val != null) hasContent = true;
+        obj[h] = val;
+      });
+      if (hasContent) rows.push(obj);
+    }
+    return rows;
+  }
+
+  function filterRecordsByUser_(records, userCode) {
+    const code = String(userCode || '').trim();
+    if (!code) return [];
+    return records.filter(rec => {
+      const criado = String(rec.CriadoPorCode || '').trim();
+      const validado = String(rec.ValidadoPorCode || '').trim();
+      return criado === code || validado === code;
+    });
+  }
+
+  function buildDashboardFromRecords_(records) {
+    const statusMap = new Map();
+    const valorStatusMap = new Map();
+    const mesMap = new Map();
+    const usuarioMap = new Map();
+    let totalValor = 0;
+
+    records.forEach(rec => {
+      const status = String(rec.Status || 'Sem status');
+      const valor = toNumber_(rec.ValorNF);
+      totalValor += valor;
+
+      statusMap.set(status, (statusMap.get(status) || 0) + 1);
+      valorStatusMap.set(status, (valorStatusMap.get(status) || 0) + valor);
+
+      const dataRef = parseDate_(rec.Emissao || rec.CriadoEm || rec.ValidadoEm);
+      const mk = monthKey_(dataRef);
+      const mesEntry = mesMap.get(mk.key) || { label: mk.label, count: 0, valor: 0 };
+      mesEntry.count += 1;
+      mesEntry.valor += valor;
+      mesMap.set(mk.key, mesEntry);
+
+      const responsavel = String(rec.ValidadorNome || rec.ValidadoPorCode || rec.CriadoPorCode || 'Sem responsável').trim() || 'Sem responsável';
+      usuarioMap.set(responsavel, (usuarioMap.get(responsavel) || 0) + 1);
+    });
+
+    const resumo = {
+      totalNotas: records.length,
+      totalValor: Math.round(totalValor * 100) / 100,
+      pendentes: statusMap.get('Pendente') || 0,
+      aceitas: statusMap.get('Aceita') || 0,
+      recusadas: statusMap.get('Recusada') || 0,
+      ultimaAtualizacao: new Date()
+    };
+
+    function dataset(columns, rows) {
+      return { columns, rows };
+    }
+
+    const statusRows = Array.from(statusMap.entries()).sort((a, b) => b[1] - a[1]).map(([s, q]) => [s, q]);
+    const valorRows = Array.from(valorStatusMap.entries()).sort((a, b) => b[1] - a[1]).map(([s, v]) => [s, Math.round(v * 100) / 100]);
+
+    const mesOrder = Array.from(mesMap.entries()).sort((a, b) => {
+      if (a[0] === 'Sem data') return 1;
+      if (b[0] === 'Sem data') return -1;
+      return a[0].localeCompare(b[0]);
+    });
+    const mesRows = mesOrder.map(([, info]) => [info.label, info.count, Math.round(info.valor * 100) / 100]);
+
+    const usuarioRows = Array.from(usuarioMap.entries()).sort((a, b) => b[1] - a[1]).map(([u, q]) => [u, q]);
+
+    return {
+      resumo,
+      charts: {
+        status: dataset([['string', 'Status'], ['number', 'Notas']], statusRows),
+        valorPorStatus: dataset([['string', 'Status'], ['number', 'Valor NF']], valorRows),
+        porMes: dataset([['string', 'Mês'], ['number', 'Notas'], ['number', 'Valor NF']], mesRows),
+        porUsuario: dataset([['string', 'Responsável'], ['number', 'Notas']], usuarioRows)
+      }
+    };
+  }
+
   // ------------- Params -------------
   function getParam(param) {
     const cache = CacheService.getScriptCache();
@@ -217,6 +364,61 @@ function detalhar(id, userCode) {
 }
 
 
+  function dashboard(params) {
+    try {
+      const registros = collectBaseRecords_();
+      const dash = buildDashboardFromRecords_(registros);
+      return Object.assign({ ok: true }, dash);
+    } catch (err) {
+      return { ok:false, code:'DASHBOARD_ERROR', message:String(err && err.message || err) };
+    }
+  }
+
+  function dashboardPessoal(userCode, userName) {
+    try {
+      const registros = collectBaseRecords_();
+      const meus = filterRecordsByUser_(registros, userCode);
+      const dash = buildDashboardFromRecords_(meus);
+      dash.resumo.usuario = userName || '';
+      return Object.assign({ ok: true }, dash);
+    } catch (err) {
+      return { ok:false, code:'DASHBOARD_PESSOAL_ERROR', message:String(err && err.message || err) };
+    }
+  }
+
+  function minhasAtividades(params, userCode) {
+    try {
+      const ss = getSpreadsheet();
+      const sh = ss.getSheetByName(SHEET_LOG);
+      if (!sh) return { ok:true, rows:[], total:0 };
+      const data = sh.getDataRange().getValues();
+      if (data.length <= 1) return { ok:true, rows:[], total:0 };
+      const headers = data[0].map(h => String(h || '').trim());
+      const idx = Object.fromEntries(headers.map((h, i) => [h, i]));
+      const rows = [];
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const user = String(row[idx['UserCode'] != null ? idx['UserCode'] : 1] || '').trim();
+        if (user === String(userCode || '').trim()) {
+          const obj = {};
+          headers.forEach((h, j) => obj[h] = row[j]);
+          rows.push(obj);
+        }
+      }
+      const type = params && params.type;
+      let filtered = rows;
+      if (type === 'uploads') {
+        filtered = rows.filter(r => String(r.Acao || '').toUpperCase().indexOf('UPLOAD') !== -1);
+      } else if (type === 'validacoes') {
+        filtered = rows.filter(r => String(r.Acao || '').toUpperCase().indexOf('VALIDAR') !== -1);
+      }
+      return { ok:true, rows: filtered, total: filtered.length };
+    } catch (err) {
+      return { ok:false, code:'ATIVIDADES_ERROR', message:String(err && err.message || err) };
+    }
+  }
+
+
 
   // ------------- Validar (Salvar) -------------
   function validar(payload, userCode, userEmail, userName) {
@@ -386,7 +588,12 @@ function detalhar(id, userCode) {
     handleUpload,
     listar,
     detalhar,
+    dashboard,
+    dashboardPessoal,
+    minhasAtividades,
     validar,
-    logAction
+    logAction,
+    parseXml: parseXml_,
+    saveRecord: saveRecord_
   };
 })();

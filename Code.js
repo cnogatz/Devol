@@ -274,6 +274,36 @@ function apiValidarServer(payload, pin) {
   } catch (e) { return { ok:false, message:String(e) }; }
 }
 
+function apiDashboardServer(pin) {
+  try {
+    if (!pin) return { ok:false, code:'PIN_REQUIRED', message:'PIN obrigatório' };
+    const session = Services.validarPIN(pin);
+    if (!session || !session.ok) {
+      return { ok:false, code:'SESSION_INVALID', message:'PIN inválido ou inativo.' };
+    }
+    const resp = Services.dashboard({}) || {};
+    return resp.ok ? resp : Object.assign({ ok:false }, resp, { message: resp.message || 'Falha ao montar dashboard.' });
+  } catch (e) {
+    Logger.log('[apiDashboardServer][EXCEPTION] %s', e && e.stack || e);
+    return { ok:false, code:'EXCEPTION', message:String(e && e.message || e) };
+  }
+}
+
+function apiDashboardPessoalServer(pin) {
+  try {
+    if (!pin) return { ok:false, code:'PIN_REQUIRED', message:'PIN obrigatório' };
+    const session = Services.validarPIN(pin);
+    if (!session || !session.ok) {
+      return { ok:false, code:'SESSION_INVALID', message:'PIN inválido ou inativo.' };
+    }
+    const resp = Services.dashboardPessoal(pin, session.nome || '') || {};
+    return resp.ok ? resp : Object.assign({ ok:false }, resp, { message: resp.message || 'Falha ao montar dashboard pessoal.' });
+  } catch (e) {
+    Logger.log('[apiDashboardPessoalServer][EXCEPTION] %s', e && e.stack || e);
+    return { ok:false, code:'EXCEPTION', message:String(e && e.message || e) };
+  }
+}
+
 function testListar() {
   var pin = "123456"; // coloca um PIN válido que exista na aba Users
   var res = apiListarServer(pin);

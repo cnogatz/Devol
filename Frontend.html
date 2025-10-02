@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <base target="_top">
     <title>Devoluções NFe</title>
+    <script src="https://www.gstatic.com/charts/loader.js"></script>
     <?!= include('FrontendCSS'); ?>
   </head>
   <body>
@@ -47,9 +48,41 @@
       <!-- Seção de Dashboard -->
       <div id="dashboardSection" class="pageSection" style="display:none;">
         <h3>Dashboard Geral</h3>
-        <div id="dashboardContent"></div>
+        <div style="margin-bottom:12px;">
+          <button id="btnAtualizarDashboard" type="button">Atualizar Dashboard</button>
+        </div>
+        <div id="dashboardContent" class="dashboardGrid">
+          <div class="chartCard">
+            <h4>Notas por status</h4>
+            <div id="chartStatusGeral" class="chartBox"></div>
+          </div>
+          <div class="chartCard">
+            <h4>Valor por status</h4>
+            <div id="chartValorStatusGeral" class="chartBox"></div>
+          </div>
+          <div class="chartCard">
+            <h4>Notas por mês</h4>
+            <div id="chartMesGeral" class="chartBox"></div>
+          </div>
+          <div class="chartCard">
+            <h4>Validações por usuário</h4>
+            <div id="chartUsuarioGeral" class="chartBox"></div>
+          </div>
+        </div>
+        <div id="dashboardResumo" class="dashboardResumo"></div>
+
         <h3>Meu Dashboard</h3>
-        <div id="dashboardPessoalContent"></div>
+        <div id="dashboardPessoalContent" class="dashboardGrid">
+          <div class="chartCard">
+            <h4>Status das minhas notas</h4>
+            <div id="chartStatusPessoal" class="chartBox"></div>
+          </div>
+          <div class="chartCard">
+            <h4>Minhas notas por mês</h4>
+            <div id="chartMesPessoal" class="chartBox"></div>
+          </div>
+        </div>
+        <div id="dashboardResumoPessoal" class="dashboardResumo"></div>
       </div>
 
       <!-- Seção de Minhas Atividades -->
@@ -60,48 +93,6 @@
         <table id="atividadesTable"></table>
       </div>
     </div>
-
-
-<!-- Detalhe / Validação -->
-<div id="detalheSection" class="pageSection" style="display:none;">
-  <h3>Detalhe da Nota</h3>
-  <div id="detalheInfo"></div>
-
-  <div style="margin:10px 0;">
-    <label><input type="radio" name="statusNota" value="Aceita"> Aceitar nota</label>
-    <label style="margin-left:12px;"><input type="radio" name="statusNota" value="Recusada"> Recusar nota</label>
-  </div>
-
-  <div id="pagamentoBox" style="display:none;">
-    <label>Forma de pagamento:
-      <select id="formaPagamento">
-        <option value="">Selecione</option>
-        <option>Pix</option><option>Depósito</option><option>Dinheiro</option><option>Crédito</option><option>Outros</option>
-      </select>
-    </label>
-    <label style="margin-left:8px;">Data pagamento:
-      <input type="date" id="dataPagamento">
-    </label>
-  </div>
-
-  <label>Observações da nota:
-    <input id="obsNota" type="text" placeholder="(obrigatório se Recusada)">
-  </label>
-
-  <h4>Itens</h4>
-  <table id="itensTable">
-    <tr>
-      <th>Seq</th><th>Código</th><th>Descrição</th><th>Qtd</th>
-      <th>Status</th><th>Motivo</th><th>Qtde Devolvida</th><th>Obs</th>
-    </tr>
-  </table>
-
-  <div style="margin-top:12px;">
-    <button id="btnSalvarValidacao" type="button">Salvar validação</button>
-    <button id="btnVoltarLista" type="button">Voltar</button>
-  </div>
-  <div id="detalheMsg" style="margin-top:8px;"></div>
-</div>
 
 
 

@@ -7,12 +7,39 @@
   function getPIN(){ return sessionStorage.getItem('userPin') || ''; }
   function setUser(pin, nome){ sessionStorage.setItem('userPin', pin||''); sessionStorage.setItem('userNome', nome||''); }
 
+  const onShowHandlers = {};
+  const chartsPromise = new Promise(function(resolve){
+    if (window.google && google.charts) {
+      google.charts.load('current', { packages: ['corechart'] });
+      google.charts.setOnLoadCallback(function(){ resolve(); });
+    } else {
+      resolve();
+    }
+  });
+  const dashboardState = { geral:false, pessoal:false };
+  const numberFormatter = (typeof Intl !== 'undefined' && Intl.NumberFormat)
+    ? new Intl.NumberFormat('pt-BR')
+    : { format: function(v){ return String(v); } };
+  const currencyFormatter = (typeof Intl !== 'undefined' && Intl.NumberFormat)
+    ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+    : { format: function(v){ return 'R$ ' + Number(v || 0).toFixed(2); } };
+
+  function hasChartsLib(){ return !!(window.google && google.visualization); }
+  function formatNumberPT(value){ const n = Number(value) || 0; return numberFormatter.format(Math.round(n)); }
+  function formatCurrencyPT(value){ const n = Number(value) || 0; return currencyFormatter.format(n); }
+  function formatDateTime(value){
+    if (!value) return '';
+    const d = (value instanceof Date) ? value : new Date(value);
+    return isNaN(d.getTime()) ? '' : d.toLocaleString('pt-BR');
+  }
+
   function showOnly(sectionId){
     $all('.pageSection').forEach(s => s.style.display = 'none');
     const menu = $('#menuSection'); if (menu) menu.style.display = 'block';
     if (sectionId) {
       const sec = document.getElementById(sectionId);
       if (sec) sec.style.display = 'block';
+      if (onShowHandlers[sectionId]) onShowHandlers[sectionId]();
     }
   }
 
@@ -137,6 +164,146 @@
         })
         .apiListarServer(pin);
     });
+  }
+
+  // ---------- DASHBOARD ----------
+  function drawChartDataset(dataset, chartType, elementId, options){
+    const container = document.getElementById(elementId);
+    if (!container) return;
+    if (!dataset || !(dataset.rows || []).length){
+      container.innerHTML = '<p class="infoMsg">Sem dados disponíveis.</p>';
+      return;
+    }
+    if (!hasChartsLib()){
+      container.innerHTML = '<p class="infoMsg">Biblioteca de gráficos indisponível.</p>';
+      return;
+    }
+
+    const dataTable = new google.visualization.DataTable();
+    (dataset.columns || []).forEach(function(col){ dataTable.addColumn(col[0], col[1]); });
+    dataTable.addRows(dataset.rows);
+
+    let chart;
+    switch (chartType) {
+      case 'pie': chart = new google.visualization.PieChart(container); break;
+      case 'bar': chart = new google.visualization.BarChart(container); break;
+      default: chart = new google.visualization.ColumnChart(container); break;
+    }
+    const baseOptions = {
+      legend: { position: 'bottom' },
+      chartArea: { width: '80%', height: '70%' },
+      height: 240,
+      backgroundColor: 'transparent'
+    };
+    chart.draw(dataTable, Object.assign(baseOptions, options || {}));
+  }
+
+  function renderResumoDashboard(targetId, resumo, emptyMsg){
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    if (!resumo || !resumo.totalNotas){
+      el.innerHTML = `<p class="infoMsg">${emptyMsg || 'Nenhuma nota encontrada para o período informado.'}</p>`;
+      return;
+    }
+
+    const partes = [
+      `<strong>Total de notas:</strong> ${formatNumberPT(resumo.totalNotas)}`,
+      `<strong>Valor total:</strong> ${formatCurrencyPT(resumo.totalValor || 0)}`,
+      `<strong>Pendentes:</strong> ${formatNumberPT(resumo.pendentes || 0)}`,
+      `<strong>Aceitas:</strong> ${formatNumberPT(resumo.aceitas || 0)}`,
+      `<strong>Recusadas:</strong> ${formatNumberPT(resumo.recusadas || 0)}`
+    ];
+    if (resumo.ultimaAtualizacao){
+      partes.push(`<strong>Última atualização:</strong> ${formatDateTime(resumo.ultimaAtualizacao)}`);
+    }
+    el.innerHTML = partes.join(' | ');
+  }
+
+  function renderDashboardGeral(data){
+    const charts = (data && data.charts) || {};
+    renderResumoDashboard('dashboardResumo', data && data.resumo);
+    drawChartDataset(charts.status, 'pie', 'chartStatusGeral', { pieHole: 0.35 });
+    drawChartDataset(charts.valorPorStatus, 'pie', 'chartValorStatusGeral', { pieHole: 0.35 });
+    drawChartDataset(charts.porMes, 'column', 'chartMesGeral', { legend: { position: 'bottom' } });
+    drawChartDataset(charts.porUsuario, 'bar', 'chartUsuarioGeral', { legend: { position: 'none' } });
+  }
+
+  function renderDashboardPessoal(data){
+    const charts = (data && data.charts) || {};
+    renderResumoDashboard('dashboardResumoPessoal', data && data.resumo, 'Ainda não há notas vinculadas a você.');
+    drawChartDataset(charts.status, 'pie', 'chartStatusPessoal', { pieHole: 0.35 });
+    drawChartDataset(charts.porMes, 'column', 'chartMesPessoal');
+  }
+
+  function carregarDashboardGeral(force){
+    if (!force && dashboardState.geral) return;
+    const resumo = $('#dashboardResumo');
+    if (resumo) resumo.innerHTML = '<p class="infoMsg">Carregando informações...</p>';
+    const pin = getPIN();
+    if (!pin) {
+      if (resumo) resumo.innerHTML = '<p class="infoMsg">Faça login para visualizar o dashboard.</p>';
+      return;
+    }
+    chartsPromise.then(function(){
+      google.script.run
+        .withSuccessHandler(function(resp){
+          if (!(resp && resp.ok)){
+            if (resumo) resumo.innerHTML = `<p class="infoMsg">Falha ao carregar dashboard: ${(resp && (resp.message || resp.code)) || 'erro inesperado'}.</p>`;
+            return;
+          }
+          renderDashboardGeral(resp);
+          dashboardState.geral = true;
+        })
+        .withFailureHandler(function(err){
+          console.error('apiDashboardServer FAIL →', err);
+          if (resumo) resumo.innerHTML = '<p class="infoMsg">Erro de conexão ao carregar dashboard.</p>';
+        })
+        .apiDashboardServer(pin);
+    });
+  }
+
+  function carregarDashboardPessoal(force){
+    if (!force && dashboardState.pessoal) return;
+    const resumo = $('#dashboardResumoPessoal');
+    if (resumo) resumo.innerHTML = '<p class="infoMsg">Carregando informações pessoais...</p>';
+    const pin = getPIN();
+    if (!pin) {
+      if (resumo) resumo.innerHTML = '<p class="infoMsg">Faça login para visualizar o dashboard pessoal.</p>';
+      return;
+    }
+    chartsPromise.then(function(){
+      google.script.run
+        .withSuccessHandler(function(resp){
+          if (!(resp && resp.ok)){
+            if (resumo) resumo.innerHTML = `<p class="infoMsg">Falha ao carregar meu dashboard: ${(resp && (resp.message || resp.code)) || 'erro inesperado'}.</p>`;
+            return;
+          }
+          renderDashboardPessoal(resp);
+          dashboardState.pessoal = true;
+        })
+        .withFailureHandler(function(err){
+          console.error('apiDashboardPessoalServer FAIL →', err);
+          if (resumo) resumo.innerHTML = '<p class="infoMsg">Erro de conexão ao carregar meu dashboard.</p>';
+        })
+        .apiDashboardPessoalServer(pin);
+    });
+  }
+
+  onShowHandlers['dashboardSection'] = function(){
+    carregarDashboardGeral(false);
+    carregarDashboardPessoal(false);
+  };
+
+  function bindDashboard(){
+    const btn = $('#btnAtualizarDashboard');
+    if (btn) {
+      btn.addEventListener('click', function(){
+        dashboardState.geral = false;
+        dashboardState.pessoal = false;
+        carregarDashboardGeral(true);
+        carregarDashboardPessoal(true);
+      });
+    }
   }
 
   // ---------- DETALHE ----------
@@ -317,6 +484,7 @@ if (!(data && data.ok)) {
     bindUpload();
     bindLista();
     bindMenu();
+    bindDashboard();
     if (getPIN()){
       const login = $('#loginSection'); if (login) login.style.display = 'none';
       showOnly('uploadSection');
