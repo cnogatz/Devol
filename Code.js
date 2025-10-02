@@ -209,6 +209,40 @@ function apiUploadServer(xml, pin) {
   }
 }
 
+// Upload em lote: cada item carrega seu próprio PIN derivado do nome do arquivo (6 primeiros dígitos)
+function apiUploadBatchServer(batch) {
+  try {
+    if (!Array.isArray(batch) || batch.length === 0) {
+      return { ok:false, code:'NO_BATCH', message:'Nenhum arquivo informado' };
+    }
+    if (!Services || typeof Services.handleUpload !== 'function') {
+      return { ok:false, code:'MISSING_SERVICE', message:'Services.handleUpload não encontrado' };
+    }
+    const created = [], errors = [];
+    batch.forEach(function(item){
+      try {
+        const xml = (item && item.xml) || '';
+        const pin = (item && item.pin) || '';
+        if (!xml) throw new Error('XML vazio');
+        if (!pin || String(pin).length !== 6) throw new Error('PIN inválido (precisa 6 dígitos do nome)');
+        const e = { postData: { type: 'application/json', contents: JSON.stringify({ xml: xml }) } };
+        const out = Services.handleUpload(e, pin, '');
+        if (out && out.ok) {
+          (out.created || []).forEach(c => created.push(c));
+          (out.errors  || []).forEach(er => errors.push(er));
+        } else {
+          errors.push({ message: (out && (out.message || out.code)) || 'Falha desconhecida' });
+        }
+      } catch (e) {
+        errors.push({ message: String(e && e.message || e) });
+      }
+    });
+    return { ok:true, created, errors };
+  } catch (err) {
+    return { ok:false, code:'BATCH_ERROR', message:String(err && err.message || err) };
+  }
+}
+
 const WEBAPP_VERSION = 'v0.3-listar-fix';
 
 function apiVersionServer() {

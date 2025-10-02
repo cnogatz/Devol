@@ -30,7 +30,8 @@
       <!-- Seção de Upload -->
       <div id="uploadSection" class="pageSection" style="display:none;">
         <h3>Enviar XML de devolução</h3>
-        <p>Copie e cole o conteúdo do XML abaixo (somente um por vez nesta versão).</p>
+        <p>Você pode selecionar um arquivo .xml ou colar o conteúdo (um por vez).</p>
+        <input id="xmlFile" type="file" accept=".xml,text/xml" multiple style="margin:6px 0;">
         <textarea id="xmlText" rows="12" placeholder="Cole aqui o XML completo"></textarea>
         <br />
         <button id="btnUpload" type="button">Importar XML</button>

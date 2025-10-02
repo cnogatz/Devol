@@ -50,27 +50,49 @@
     const btn = $('#btnUpload');
     if (!btn) return;
     btn.addEventListener('click', function(){
-      const pin = getPIN();
-      const xml = ($('#xmlText')?.value || '').trim();
+      const fileInput = $('#xmlFile');
+      const textXml = ($('#xmlText')?.value || '').trim();
       const msg = $('#uploadMsg');
-      if (!pin){ setMsg(msg, 'Faça login primeiro.', 'err'); return; }
-      if (!xml){ setMsg(msg, 'Cole um XML antes de enviar.', 'err'); return; }
-      setMsg(msg, 'Enviando...', '');
+      const finishSingle = (xmlStr, pinFromName) => ({ xml: xmlStr, pin: pinFromName });
+      const finishBatch = (batch) => {
+        if (!batch.length) { setMsg(msg, 'Selecione arquivos ou cole um XML.', 'err'); return; }
+        setMsg(msg, 'Enviando...', '');
+        google.script.run
+          .withSuccessHandler(function (data){
+            if (data && data.ok){
+              const n = (data.created || []).length;
+              const errs = (data.errors || []).length;
+              setMsg(msg, `Importado com sucesso (${n} registro${n!==1?'s':''}). Erros: ${errs}.`, errs? 'err':'ok');
+            } else {
+              setMsg(msg, (data && (data.message || data.code)) || 'Falha ao importar.', 'err');
+            }
+          })
+          .withFailureHandler(function (err){
+            setMsg(msg, 'Erro de conexão', 'err');
+            console.error('apiUploadBatchServer error:', err);
+          })
+          .apiUploadBatchServer(batch);
+      };
 
-      google.script.run
-        .withSuccessHandler(function (data){
-          if (data && data.ok){
-            const n = (data.created || []).length;
-            setMsg(msg, `Importado com sucesso (${n} registro).`, 'ok');
-          } else {
-            setMsg(msg, (data && (data.message || data.code)) || 'Falha ao importar.', 'err');
-          }
-        })
-        .withFailureHandler(function (err){
-          setMsg(msg, 'Erro de conexão', 'err');
-          console.error('apiUploadServer error:', err);
-        })
-        .apiUploadServer(xml, pin);
+      // Se arquivo foi selecionado, lê como texto; senão usa textarea
+      const files = (fileInput && fileInput.files) ? Array.from(fileInput.files) : [];
+      if (files.length > 0) {
+        const pending = [];
+        let done = 0;
+        const out = [];
+        const onDone = () => { done++; if (done === pending.length) finishBatch(out); };
+        files.forEach(f => {
+          const pinFromName = (f.name || '').replace(/[^0-9]/g,'').slice(0,6);
+          const reader = new FileReader();
+          reader.onload = () => { out.push(finishSingle(String(reader.result||''), pinFromName)); onDone(); };
+          reader.onerror = () => { out.push(finishSingle('', pinFromName)); onDone(); };
+          pending.push(f);
+          reader.readAsText(f, 'utf-8');
+        });
+      } else {
+        // fallback: conteúdo colado; tenta PIN a partir de um comentário opcional no topo (não obrigatório)
+        finishBatch(textXml ? [finishSingle(textXml, '')] : []);
+      }
     });
   }
 

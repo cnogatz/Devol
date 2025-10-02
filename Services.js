@@ -305,51 +305,74 @@ function detalhar(id, userCode) {
   function parseXml_(xmlStr) {
     const doc  = XmlService.parse(xmlStr);
     const root = doc.getRootElement();
+    function getChildAnyNS(parent, name) {
+      if (!parent) return null;
+      return parent.getChild(name) || parent.getChild(name, parent.getNamespace()) || (function(){
+        const list = parent.getChildren();
+        for (let i=0;i<list.size?list.size():list.length;i++){
+          const el = list.get ? list.get(i) : list[i];
+          if (el && el.getName && el.getName() === name) return el;
+        }
+        return null;
+      })();
+    }
+    function getTextAnyNS(parent, name) {
+      const el = getChildAnyNS(parent, name);
+      return el ? el.getText() : '';
+    }
+
     let infNFe;
     if (root.getName() === 'nfeProc') {
-      const nfe = root.getChild('NFe'); infNFe = nfe && nfe.getChild('infNFe');
+      const nfe = getChildAnyNS(root, 'NFe'); infNFe = getChildAnyNS(nfe, 'infNFe');
     } else if (root.getName() === 'NFe') {
-      infNFe = root.getChild('infNFe');
+      infNFe = getChildAnyNS(root, 'infNFe');
     }
     if (!infNFe) throw new Error('XML NFe não reconhecido');
 
-    const ide  = infNFe.getChild('ide');
-    const emit = infNFe.getChild('emit');
-    const dest = infNFe.getChild('dest');
-    const tot  = infNFe.getChild('total');
-    const icms = tot && tot.getChild('ICMSTot');
+    const ide  = getChildAnyNS(infNFe, 'ide');
+    const emit = getChildAnyNS(infNFe, 'emit');
+    const dest = getChildAnyNS(infNFe, 'dest');
+    const tot  = getChildAnyNS(infNFe, 'total');
+    const icms = tot && getChildAnyNS(tot, 'ICMSTot');
 
-    const chaveNFe = (infNFe.getAttribute('Id') && infNFe.getAttribute('Id').getValue().replace(/^NFe/, '')) || '';
+    const idAttr = infNFe.getAttribute('Id');
+    const chaveNFe = (idAttr && idAttr.getValue().replace(/^NFe/, '')) || '';
     const base = {
       chaveNFe: chaveNFe || 'não informado',
-      numero: ide ? (ide.getChildText('nNF') || 'não informado') : 'não informado',
-      serie:  ide ? (ide.getChildText('serie') || 'não informado') : 'não informado',
-      emissao: ide ? (ide.getChildText('dhEmi') || ide.getChildText('dEmi') || 'não informado') : 'não informado',
+      numero: ide ? (getTextAnyNS(ide, 'nNF') || 'não informado') : 'não informado',
+      serie:  ide ? (getTextAnyNS(ide, 'serie') || 'não informado') : 'não informado',
+      emissao: ide ? (getTextAnyNS(ide, 'dhEmi') || getTextAnyNS(ide, 'dEmi') || 'não informado') : 'não informado',
       cfop: 'não informado',
-      emitenteNome: emit ? (emit.getChildText('xNome') || 'não informado') : 'não informado',
-      emitenteCNPJ: emit ? (emit.getChildText('CNPJ') || emit.getChildText('CPF') || 'não informado') : 'não informado',
-      destinatarioNome: dest ? (dest.getChildText('xNome') || 'não informado') : 'não informado',
-      destinatarioCNPJ: dest ? (dest.getChildText('CNPJ') || dest.getChildText('CPF') || 'não informado') : 'não informado',
-      valorNF:   icms ? (icms.getChildText('vNF')   || '0') : '0',
-      valorICMS: icms ? (icms.getChildText('vICMS') || '0') : '0'
+      emitenteNome: emit ? (getTextAnyNS(emit, 'xNome') || 'não informado') : 'não informado',
+      emitenteCNPJ: emit ? (getTextAnyNS(emit, 'CNPJ') || getTextAnyNS(emit, 'CPF') || 'não informado') : 'não informado',
+      destinatarioNome: dest ? (getTextAnyNS(dest, 'xNome') || 'não informado') : 'não informado',
+      destinatarioCNPJ: dest ? (getTextAnyNS(dest, 'CNPJ') || getTextAnyNS(dest, 'CPF') || 'não informado') : 'não informado',
+      valorNF:   icms ? (getTextAnyNS(icms, 'vNF')   || '0') : '0',
+      valorICMS: icms ? (getTextAnyNS(icms, 'vICMS') || '0') : '0'
     };
 
     const itens = [];
-    (infNFe.getChildren('det') || []).forEach(det => {
-      const prod = det.getChild('prod');
-      const cfop = prod ? (prod.getChildText('CFOP') || '') : '';
+    const children = infNFe.getChildren();
+    const len = children.size ? children.size() : children.length;
+    for (let i=0;i<len;i++){
+      const det = children.get ? children.get(i) : children[i];
+      if (!det || det.getName() !== 'det') continue;
+      const prod = getChildAnyNS(det, 'prod');
+      const cfop = prod ? (getTextAnyNS(prod, 'CFOP') || '') : '';
       if (base.cfop === 'não informado' && cfop) base.cfop = cfop;
+      const nItemAttr = det.getAttribute('nItem');
+      const seqVal = nItemAttr ? parseInt(nItemAttr.getValue(),10) : i+1;
       itens.push({
-        seq: parseInt(det.getAttribute('nItem').getValue(), 10),
-        codigo:     prod ? (prod.getChildText('cProd') || 'não informado') : 'não informado',
-        descricao:  prod ? (prod.getChildText('xProd') || 'não informado') : 'não informado',
-        ncm:        prod ? (prod.getChildText('NCM')  || 'não informado') : 'não informado',
+        seq: seqVal,
+        codigo:     prod ? (getTextAnyNS(prod, 'cProd') || 'não informado') : 'não informado',
+        descricao:  prod ? (getTextAnyNS(prod, 'xProd') || 'não informado') : 'não informado',
+        ncm:        prod ? (getTextAnyNS(prod, 'NCM')  || 'não informado') : 'não informado',
         cfop:       cfop || 'não informado',
-        quantidade: prod ? (prod.getChildText('qCom')  || '0') : '0',
-        vlrUnit:    prod ? (prod.getChildText('vUnCom')|| '0') : '0',
-        vlrTotal:   prod ? (prod.getChildText('vProd') || '0') : '0'
+        quantidade: prod ? (getTextAnyNS(prod, 'qCom')  || '0') : '0',
+        vlrUnit:    prod ? (getTextAnyNS(prod, 'vUnCom')|| '0') : '0',
+        vlrTotal:   prod ? (getTextAnyNS(prod, 'vProd') || '0') : '0'
       });
-    });
+    }
 
     return { base, itens };
   }
