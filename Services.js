@@ -426,7 +426,13 @@ const Services = (function () {
         const obj = {};
         headers.forEach((h, j) => {
           let value = row[j];
-          if (value instanceof Date) value = value.toISOString();
+          if (value instanceof Date) {
+            value = value.toISOString();
+          } else if (value === null || value === undefined) {
+            value = '';
+          } else if (typeof value === 'string' && value.trim().toLowerCase() === 'null') {
+            value = '';
+          }
           obj[h] = value;
         });
         rows.push(obj);
