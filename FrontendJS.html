@@ -156,7 +156,8 @@
   const obs = $('#obsNota'); if (obs) obs.value = '';
   showOnly('detalheSection');
   setMsg(msg, 'Carregando...', '');
-
+console.log('Detalhar ID →', id);
+console.log('Detalhar Pin →', pin);
   google.script.run
     .withSuccessHandler(function (data) {
       console.log('apiDetalharServer →', data); // <— log completo
@@ -297,19 +298,24 @@ if (!(data && data.ok)) {
   }
 
   // ---------- MENU / LOGOUT ----------
-  function bindMenu(){
-    $all('#menuSection [data-section]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const target = btn.getAttribute('data-section') + 'Section';
-        showOnly(target);
-      });
+function bindMenu(){
+  $all('#menuSection [data-section]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const sectionName = btn.getAttribute('data-section');
+      const target = sectionName + 'Section';
+      showOnly(target);
+      // Se for o dashboard, atualiza os gráficos e indicadores
+      if (sectionName === 'dashboard' && typeof loadDashboards === 'function') {
+        loadDashboards();
+      }
     });
-    const out = $('#btnLogout');
-    if (out) out.addEventListener('click', () => {
-      sessionStorage.clear();
-      location.reload();
-    });
-  }
+  });
+  const out = $('#btnLogout');
+  if (out) out.addEventListener('click', () => {
+    sessionStorage.clear();
+    location.reload();
+  });
+}
 
   // ---------- Bootstrap ----------
   document.addEventListener('DOMContentLoaded', function(){

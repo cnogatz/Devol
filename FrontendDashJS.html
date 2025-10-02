@@ -1,0 +1,227 @@
+// Robust front‑end script for the Devoluções NFe dashboard.
+// This script should be included in your FrontendJS.html file via
+// <?!= HtmlService.createHtmlOutputFromFile('robust_frontend').getContent(); ?>
+// It uses Chart.js (loaded dynamically) to render charts and builds
+// a more featureful dashboard.
+
+(() => {
+  /**
+   * Loads the Chart.js library if it is not already loaded. Returns a Promise
+   * that resolves when Chart.js is ready.
+   */
+  function loadChartJs() {
+    return new Promise((resolve) => {
+      if (window.Chart) {
+        resolve();
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.3.0/chart.umd.min.js';
+      script.onload = () => resolve();
+      document.head.appendChild(script);
+    });
+  }
+
+  /**
+   * Formats a number as Brazilian Real currency string.
+   * @param {number} value
+   */
+  function formatCurrency(value) {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  }
+
+  /**
+   * Creates or updates a Chart.js chart.
+   * @param {HTMLCanvasElement} canvas
+   * @param {string} type
+   * @param {object} data
+   * @param {object} options
+   */
+  function renderChart(canvas, type, data, options = {}) {
+    // If a chart instance already exists on this canvas, destroy it first
+    if (canvas.__chart) {
+      canvas.__chart.destroy();
+    }
+    const ctx = canvas.getContext('2d');
+    const chart = new Chart(ctx, {
+      type,
+      data,
+      options,
+    });
+    canvas.__chart = chart;
+  }
+
+  /**
+   * Renders the general dashboard into the provided container element.
+   * @param {Element} container
+   * @param {object} data
+   */
+  function renderDashboard(container, data) {
+    container.innerHTML = '';
+    if (!data || !data.ok) {
+      container.textContent = data && data.message ? data.message : 'Erro ao carregar o dashboard.';
+      return;
+    }
+    // Summary table
+    const summarySection = document.createElement('div');
+    summarySection.innerHTML = '<h4>Resumo geral</h4>';
+    const summaryTable = document.createElement('table');
+    summaryTable.className = 'dashboard-table';
+    summaryTable.innerHTML = '<tr><th>Status</th><th>Quantidade</th><th>Valor Total</th></tr>';
+    Object.keys(data.summaryStatus).forEach((status) => {
+      const row = document.createElement('tr');
+      row.innerHTML = `<td>${status}</td><td>${data.summaryStatus[status]}</td><td>${formatCurrency(data.summaryValues[status] || 0)}</td>`;
+      summaryTable.appendChild(row);
+    });
+    summarySection.appendChild(summaryTable);
+    container.appendChild(summarySection);
+
+    // Reasons chart
+    const reasonsSection = document.createElement('div');
+    reasonsSection.innerHTML = '<h4>Motivos de recusa</h4>';
+    const reasonsCanvas = document.createElement('canvas');
+    reasonsSection.appendChild(reasonsCanvas);
+    container.appendChild(reasonsSection);
+    const reasonsLabels = Object.keys(data.reasons);
+    const reasonsValues = reasonsLabels.map((k) => data.reasons[k]);
+    renderChart(reasonsCanvas, 'pie', {
+      labels: reasonsLabels,
+      datasets: [{ data: reasonsValues }],
+    }, { plugins: { legend: { position: 'right' } }, responsive: true, maintainAspectRatio: false });
+
+    // Daily uploads chart
+    const dailySection = document.createElement('div');
+    dailySection.innerHTML = '<h4>Uploads diários</h4>';
+    const dailyCanvas = document.createElement('canvas');
+    dailySection.appendChild(dailyCanvas);
+    container.appendChild(dailySection);
+    const dailyLabels = data.dailyUploads.map((d) => d.date);
+    const dailyCounts = data.dailyUploads.map((d) => d.count);
+    renderChart(dailyCanvas, 'bar', {
+      labels: dailyLabels,
+      datasets: [{ label: 'Notas importadas', data: dailyCounts }],
+    }, { scales: { x: { ticks: { autoSkip: true, maxTicksLimit: 7 } } } });
+
+    // Productivity chart
+    const prodSection = document.createElement('div');
+    prodSection.innerHTML = '<h4>Produtividade por usuário</h4>';
+    const prodCanvas = document.createElement('canvas');
+    prodSection.appendChild(prodCanvas);
+    container.appendChild(prodSection);
+    const prodUsers = [];
+    const prodCounts = [];
+    data.productivity.created.forEach((u) => {
+      prodUsers.push(u.user);
+      prodCounts.push(u.count);
+    });
+    renderChart(prodCanvas, 'bar', {
+      labels: prodUsers,
+      datasets: [{ label: 'Notas criadas', data: prodCounts }],
+    }, { scales: { x: { ticks: { autoSkip: false } } }, plugins: { legend: { display: false } } });
+
+    // Last activities table
+    const lastSection = document.createElement('div');
+    lastSection.innerHTML = '<h4>Últimas notas</h4>';
+    const lastTable = document.createElement('table');
+    lastTable.className = 'dashboard-table';
+    lastTable.innerHTML = '<tr><th>Data</th><th>Chave</th><th>Status</th><th>Valor</th><th>Criado por</th></tr>';
+    data.lastActivities.forEach((act) => {
+      const row = document.createElement('tr');
+      row.innerHTML = `<td>${(act.criadoEm || '').slice(0, 10)}</td>` +
+                      `<td>${act.chave}</td>` +
+                      `<td>${act.status}</td>` +
+                      `<td>${formatCurrency(act.valor)}</td>` +
+                      `<td>${act.criadoPor}</td>`;
+      lastTable.appendChild(row);
+    });
+    lastSection.appendChild(lastTable);
+    container.appendChild(lastSection);
+  }
+
+  /**
+   * Renders the personal dashboard into the provided container element.
+   * @param {Element} container
+   * @param {object} data
+   */
+  function renderPersonalDashboard(container, data) {
+    container.innerHTML = '';
+    if (!data || !data.ok) {
+      container.textContent = data && data.message ? data.message : 'Erro ao carregar seu dashboard.';
+      return;
+    }
+    // Summary
+    const summarySection = document.createElement('div');
+    summarySection.innerHTML = '<h4>Meu resumo</h4>';
+    const summaryTable = document.createElement('table');
+    summaryTable.className = 'dashboard-table';
+    summaryTable.innerHTML = '<tr><th>Status</th><th>Quantidade</th><th>Valor Total</th></tr>';
+    Object.keys(data.summaryStatus).forEach((status) => {
+      const row = document.createElement('tr');
+      row.innerHTML = `<td>${status}</td><td>${data.summaryStatus[status]}</td><td>${formatCurrency(data.summaryValues[status] || 0)}</td>`;
+      summaryTable.appendChild(row);
+    });
+    summarySection.appendChild(summaryTable);
+    container.appendChild(summarySection);
+
+    // Reasons chart (if any)
+    if (Object.keys(data.reasons).length > 0) {
+      const reasonsSection = document.createElement('div');
+      reasonsSection.innerHTML = '<h4>Meus motivos de recusa</h4>';
+      const reasonsCanvas = document.createElement('canvas');
+      reasonsSection.appendChild(reasonsCanvas);
+      container.appendChild(reasonsSection);
+      const reasonsLabels = Object.keys(data.reasons);
+      const reasonsValues = reasonsLabels.map((k) => data.reasons[k]);
+      renderChart(reasonsCanvas, 'pie', {
+        labels: reasonsLabels,
+        datasets: [{ data: reasonsValues }],
+      }, { plugins: { legend: { position: 'right' } }, responsive: true, maintainAspectRatio: false });
+    }
+
+    // Last activities
+    const lastSection = document.createElement('div');
+    lastSection.innerHTML = '<h4>Minhas últimas notas</h4>';
+    const lastTable = document.createElement('table');
+    lastTable.className = 'dashboard-table';
+    lastTable.innerHTML = '<tr><th>Data</th><th>Chave</th><th>Status</th><th>Valor</th></tr>';
+    data.lastActivities.forEach((act) => {
+      const row = document.createElement('tr');
+      row.innerHTML = `<td>${(act.criadoEm || '').slice(0, 10)}</td>` +
+                      `<td>${act.chave}</td>` +
+                      `<td>${act.status}</td>` +
+                      `<td>${formatCurrency(act.valor)}</td>`;
+      lastTable.appendChild(row);
+    });
+    lastSection.appendChild(lastTable);
+    container.appendChild(lastSection);
+  }
+
+  /**
+   * Fetches dashboard data from the server and renders it.
+   */
+  function loadDashboards() {
+    const geralContainer = document.getElementById('dashboardContent');
+    const pessoalContainer = document.getElementById('dashboardPessoalContent');
+    // Carrega dashboard geral
+    google.script.run
+      .withSuccessHandler((data) => renderDashboard(geralContainer, data))
+      .withFailureHandler((err) => {
+        geralContainer.textContent = 'Erro de conexão no dashboard geral.';
+        console.error(err);
+      })
+      .dashboard();
+    // Carrega dashboard pessoal
+    google.script.run
+      .withSuccessHandler((data) => renderPersonalDashboard(pessoalContainer, data))
+      .withFailureHandler((err) => {
+        pessoalContainer.textContent = 'Erro de conexão no dashboard pessoal.';
+        console.error(err);
+      })
+      .dashboardPessoal();
+  }
+
+  // Inicializa quando a página estiver pronta
+  document.addEventListener('DOMContentLoaded', () => {
+    loadChartJs().then(loadDashboards);
+  });
+})();

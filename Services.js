@@ -156,7 +156,11 @@ function detalhar(id, userCode) {
     if (rowIndex < 0) return { ok:false, code:'NOT_FOUND', message:'Registro não encontrado na Base' };
 
     const baseObj = {};
-    baseHeaders.forEach((h,j)=> baseObj[h] = baseData[rowIndex][j]);
+  baseHeaders.forEach((h, j) => {
+  let v = baseData[rowIndex][j];
+  if (v instanceof Date) v = v.toISOString();
+  baseObj[h] = v;
+});
 
     // --- ITENS ---
     const itensSh = ss.getSheetByName(SHEET_ITENS);
@@ -379,6 +383,232 @@ function detalhar(id, userCode) {
     sh.appendRow([new Date(), userCode, userEmail, acao, idBase, seqItem || '', detalhes || '']);
   }
 
+
+
+// Calcula métricas gerais para o dashboard
+function dashboard(params) {
+  try {
+    const ss = getSpreadsheet();
+    const baseSh = ss.getSheetByName(SHEET_BASE);
+    if (!baseSh) return { ok: false, code: 'NO_BASE', message: 'Aba Base não encontrada' };
+
+    const baseData = baseSh.getDataRange().getValues();
+    if (baseData.length < 2) {
+      return { ok: true, summaryStatus: {}, summaryValues: {}, dailyUploads: [], reasons: {}, productivity: {}, lastActivities: [] };
+    }
+
+    const headers = baseData[0].map(h => String(h || '').trim());
+    const colIndex = {};
+    headers.forEach((h, i) => colIndex[h] = i);
+
+    const summaryStatus = {};
+    const summaryValues = {};
+    const dailyUploads = {};
+    const productivity = { created: {}, validated: {} };
+    const baseRows = [];
+
+    // Percorre cada linha da Base (começando em 1)
+    for (let i = 1; i < baseData.length; i++) {
+      const row = {};
+      headers.forEach((h, j) => row[h] = baseData[i][j]);
+      baseRows.push(row);
+
+      const status = String(row['Status'] || '').trim();
+      if (status) {
+        summaryStatus[status] = (summaryStatus[status] || 0) + 1;
+        const valor = parseFloat(String(row['ValorNF']).replace(',', '.')) || 0;
+        summaryValues[status] = (summaryValues[status] || 0) + valor;
+      }
+
+      const criador = String(row['CriadoPorCode'] || '');
+      if (criador) productivity.created[criador] = (productivity.created[criador] || 0) + 1;
+
+      const validador = String(row['ValidadoPorCode'] || '');
+      if (validador) productivity.validated[validador] = (productivity.validated[validador] || 0) + 1;
+
+      // Contagem por dia de criação (CriadoEm)
+      let dataCriacao = row['CriadoEm'];
+      let isoDate;
+      if (dataCriacao instanceof Date) {
+        isoDate = dataCriacao.toISOString().slice(0, 10);
+      } else {
+        try {
+          const dt = new Date(dataCriacao);
+          if (!isNaN(dt.getTime())) isoDate = dt.toISOString().slice(0, 10);
+        } catch (err) {}
+      }
+      if (isoDate) dailyUploads[isoDate] = (dailyUploads[isoDate] || 0) + 1;
+    }
+
+    // Contagem de motivos de recusa na aba Itens (StatusItem === 'Recusado')
+    const itensSh = ss.getSheetByName(SHEET_ITENS);
+    const reasons = {};
+    if (itensSh) {
+      const itData = itensSh.getDataRange().getValues();
+      if (itData.length > 1) {
+        const itHeaders = itData[0].map(h => String(h || '').trim());
+        const itIdx = {};
+        itHeaders.forEach((h, i) => itIdx[h] = i);
+
+        for (let i = 1; i < itData.length; i++) {
+          const statusItem = String(itData[i][itIdx['StatusItem']] || '').trim();
+          const motivo = String(itData[i][itIdx['MotivoItem']] || '').trim();
+          if (statusItem === 'Recusado' && motivo) {
+            reasons[motivo] = (reasons[motivo] || 0) + 1;
+          }
+        }
+      }
+    }
+
+    // Converte dailyUploads para array ordenado
+    const dailyArray = Object.keys(dailyUploads)
+      .sort()
+      .map(d => ({ date: d, count: dailyUploads[d] }));
+
+    // Converte produtividade para arrays
+    const createdArray = Object.keys(productivity.created).map(u => ({ user: u, count: productivity.created[u] }));
+    const validatedArray = Object.keys(productivity.validated).map(u => ({ user: u, count: productivity.validated[u] }));
+
+    // Últimas atividades (últimos 5 registros ordenados por CriadoEm decrescente)
+    baseRows.sort((a, b) => {
+      const ta = a['CriadoEm'] instanceof Date ? a['CriadoEm'].getTime() : new Date(a['CriadoEm']).getTime();
+      const tb = b['CriadoEm'] instanceof Date ? b['CriadoEm'].getTime() : new Date(b['CriadoEm']).getTime();
+      return tb - ta;
+    });
+    const lastActivities = baseRows.slice(0, 5).map(row => ({
+      id: row['ID'] || '',
+      chave: row['ChaveNFe'] || '',
+      emissao: row['Emissao'] instanceof Date ? row['Emissao'].toISOString() : String(row['Emissao'] || ''),
+      status: row['Status'] || '',
+      valor: parseFloat(String(row['ValorNF']).replace(',', '.')) || 0,
+      criadoEm: row['CriadoEm'] instanceof Date ? row['CriadoEm'].toISOString() : String(row['CriadoEm'] || ''),
+      criadoPor: String(row['CriadoPorCode'] || '')
+    }));
+
+    return {
+      ok: true,
+      summaryStatus,
+      summaryValues,
+      dailyUploads: dailyArray,
+      reasons,
+      productivity: { created: createdArray, validated: validatedArray },
+      lastActivities
+    };
+  } catch (err) {
+    return { ok: false, code: 'DASHBOARD_ERROR', message: String(err) };
+  }
+}
+
+// Dashboard filtrado para o usuário logado
+function dashboardPessoal(userCode, userName) {
+  try {
+    const ss = getSpreadsheet();
+    const baseSh = ss.getSheetByName(SHEET_BASE);
+    if (!baseSh) return { ok: false, code: 'NO_BASE', message: 'Aba Base não encontrada' };
+
+    const baseData = baseSh.getDataRange().getValues();
+    if (baseData.length < 2) {
+      return { ok: true, summaryStatus: {}, summaryValues: {}, dailyUploads: [], reasons: {}, productivity: {}, lastActivities: [] };
+    }
+
+    const headers = baseData[0].map(h => String(h || '').trim());
+    const colIndex = {};
+    headers.forEach((h, i) => colIndex[h] = i);
+
+    const summaryStatus = {};
+    const summaryValues = {};
+    const dailyUploads = {};
+    const baseRows = [];
+
+    // Filtra linhas criadas pelo usuário
+    for (let i = 1; i < baseData.length; i++) {
+      const row = {};
+      headers.forEach((h, j) => row[h] = baseData[i][j]);
+
+      if (String(row['CriadoPorCode'] || '') !== String(userCode)) continue;
+      baseRows.push(row);
+
+      const status = String(row['Status'] || '').trim();
+      if (status) {
+        summaryStatus[status] = (summaryStatus[status] || 0) + 1;
+        const valor = parseFloat(String(row['ValorNF']).replace(',', '.')) || 0;
+        summaryValues[status] = (summaryValues[status] || 0) + valor;
+      }
+
+      // Contagem por dia (CriadoEm)
+      let dataCriacao = row['CriadoEm'];
+      let isoDate;
+      if (dataCriacao instanceof Date) {
+        isoDate = dataCriacao.toISOString().slice(0, 10);
+      } else {
+        try {
+          const dt = new Date(dataCriacao);
+          if (!isNaN(dt.getTime())) isoDate = dt.toISOString().slice(0, 10);
+        } catch (err) {}
+      }
+      if (isoDate) dailyUploads[isoDate] = (dailyUploads[isoDate] || 0) + 1;
+    }
+
+    // Motivos de recusa apenas para itens vinculados às notas do usuário
+    const itensSh = ss.getSheetByName(SHEET_ITENS);
+    const reasons = {};
+    if (itensSh && baseRows.length > 0) {
+      const itData = itensSh.getDataRange().getValues();
+      const itHeaders = itData[0].map(h => String(h || '').trim());
+      const itIdx = {};
+      itHeaders.forEach((h, i) => itIdx[h] = i);
+
+      // Cria um conjunto de IDs da base do usuário
+      const idsUsuario = {};
+      baseRows.forEach(r => { idsUsuario[String(r['ID'])] = true; });
+
+      for (let i = 1; i < itData.length; i++) {
+        const idBase = String(itData[i][itIdx['ID_RegistroBase']] || '');
+        if (!idsUsuario[idBase]) continue;
+        const statusItem = String(itData[i][itIdx['StatusItem']] || '').trim();
+        const motivo = String(itData[i][itIdx['MotivoItem']] || '').trim();
+        if (statusItem === 'Recusado' && motivo) {
+          reasons[motivo] = (reasons[motivo] || 0) + 1;
+        }
+      }
+    }
+
+    // Converte dailyUploads para array ordenada
+    const dailyArray = Object.keys(dailyUploads)
+      .sort()
+      .map(d => ({ date: d, count: dailyUploads[d] }));
+
+    // Últimas atividades: ordena por CriadoEm decrescente (limita a 5)
+    baseRows.sort((a, b) => {
+      const ta = a['CriadoEm'] instanceof Date ? a['CriadoEm'].getTime() : new Date(a['CriadoEm']).getTime();
+      const tb = b['CriadoEm'] instanceof Date ? b['CriadoEm'].getTime() : new Date(b['CriadoEm']).getTime();
+      return tb - ta;
+    });
+    const lastActivities = baseRows.slice(0, 5).map(row => ({
+      id: row['ID'] || '',
+      chave: row['ChaveNFe'] || '',
+      emissao: row['Emissao'] instanceof Date ? row['Emissao'].toISOString() : String(row['Emissao'] || ''),
+      status: row['Status'] || '',
+      valor: parseFloat(String(row['ValorNF']).replace(',', '.')) || 0,
+      criadoEm: row['CriadoEm'] instanceof Date ? row['CriadoEm'].toISOString() : String(row['CriadoEm'] || ''),
+      criadoPor: String(row['CriadoPorCode'] || '')
+    }));
+
+    return {
+      ok: true,
+      summaryStatus,
+      summaryValues,
+      dailyUploads: dailyArray,
+      reasons,
+      productivity: {}, // neste caso, produtividade individual não é relevante
+      lastActivities
+    };
+  } catch (err) {
+    return { ok: false, code: 'DASHBOARD_PESSOAL_ERROR', message: String(err) };
+  }
+}
+
+
   // ------------- API pública -------------
   return {
     getParam,
@@ -387,6 +617,8 @@ function detalhar(id, userCode) {
     listar,
     detalhar,
     validar,
+      dashboard,     
+  dashboardPessoal,  
     logAction
   };
 })();

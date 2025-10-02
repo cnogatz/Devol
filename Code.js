@@ -274,15 +274,16 @@ function apiValidarServer(payload, pin) {
   } catch (e) { return { ok:false, message:String(e) }; }
 }
 
-function testListar() {
-  var pin = "123456"; // coloca um PIN válido que exista na aba Users
-  var res = apiListarServer(pin);
-  Logger.log(JSON.stringify(res, null, 2));
+function testDetalhar() {
+  const pin = '123456';
+  const id  = '01d0994b-febb-4c04-a445-d2eb68b18944';
+  const resp = Services.detalhar(id, pin);
+  Logger.log(JSON.stringify(resp, null, 2));
 }
 
 function testServicesListar() {
   const pin = "123456";
-  const out = Services.listar({}, pin);
+  const out = apiDetalharServer2("01d0994b-febb-4c04-a445-d2eb68b18944", pin);
   Logger.log(JSON.stringify(out,null,2));
 }
 
