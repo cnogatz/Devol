@@ -111,8 +111,10 @@ const Services = (function () {
         if (Object.values(r).some(v => v !== '' && v !== null && v !== undefined)) rows.push(r);
       }
 
-      const pageSize = params && params.pageSize ? parseInt(params.pageSize,10) : 20;
-      const page     = params && params.page     ? parseInt(params.page,10)     : 1;
+      let pageSize = params && params.pageSize ? parseInt(params.pageSize,10) : 20;
+      let page     = params && params.page     ? parseInt(params.page,10)     : 1;
+      if (!pageSize || pageSize < 1) pageSize = 20;
+      if (!page || page < 1) page = 1;
       const total    = rows.length;
       const start    = Math.max(0, (page-1)*pageSize);
       const end      = Math.min(start + pageSize, total);
@@ -123,102 +125,101 @@ const Services = (function () {
   }
 
   // ------------- Detalhar -------------
- // ------------- Detalhar (super-robusto + debug) -------------
-function detalhar(id, userCode) {
-  try {
-    if (!id) return { ok:false, code:'BAD_ID', message:'ID não informado' };
+  function detalhar(id, userCode) {
+    try {
+      if (!id) return { ok:false, code:'BAD_ID', message:'ID não informado' };
 
-    const ss = getSpreadsheet();
+      const ss = getSpreadsheet();
 
-    // --- BASE ---
-    const baseSh = ss.getSheetByName(SHEET_BASE);
-    if (!baseSh) return { ok:false, code:'NO_BASE', message:'Aba Base não encontrada' };
-    const baseData = baseSh.getDataRange().getValues();
-    if (!baseData.length) return { ok:false, code:'EMPTY_BASE', message:'Base vazia' };
+      // --- BASE ---
+      const baseSh = ss.getSheetByName(SHEET_BASE);
+      if (!baseSh) return { ok:false, code:'NO_BASE', message:'Aba Base não encontrada' };
+      const baseData = baseSh.getDataRange().getValues();
+      if (!baseData.length) return { ok:false, code:'EMPTY_BASE', message:'Base vazia' };
 
-    const baseHeaders = baseData[0].map(h => String(h||'').trim());
-    const baseIdx     = Object.fromEntries(baseHeaders.map((h,i)=>[h,i]));
+      const baseHeaders = baseData[0].map(h => String(h||'').trim());
+      const baseIdx     = Object.fromEntries(baseHeaders.map((h,i)=>[h,i]));
 
-    // acha linha por ID; se não achar, tenta todas as colunas
-    let rowIndex = -1;
-    const idCol = (baseIdx['ID'] ?? baseIdx['Id'] ?? baseIdx['id'] ?? 0);
-    for (let i=1;i<baseData.length;i++){
-      if (String(baseData[i][idCol]) === String(id)) { rowIndex = i; break; }
-    }
-    if (rowIndex < 0) {
-      outer:
+      // acha linha por ID; se não achar, tenta todas as colunas
+      let rowIndex = -1;
+      const idCol = (baseIdx['ID'] ?? baseIdx['Id'] ?? baseIdx['id'] ?? 0);
       for (let i=1;i<baseData.length;i++){
-        for (let j=0;j<baseHeaders.length;j++){
-          if (String(baseData[i][j]) === String(id)) { rowIndex = i; break outer; }
-        }
+        if (String(baseData[i][idCol]) === String(id)) { rowIndex = i; break; }
       }
-    }
-    if (rowIndex < 0) return { ok:false, code:'NOT_FOUND', message:'Registro não encontrado na Base' };
-
-    const baseObj = {};
-  baseHeaders.forEach((h, j) => {
-  let v = baseData[rowIndex][j];
-  if (v instanceof Date) v = v.toISOString();
-  baseObj[h] = v;
-});
-
-    // --- ITENS ---
-    const itensSh = ss.getSheetByName(SHEET_ITENS);
-    let itens = [];
-    let matchedBy = 'none';
-    let itHeaders = [];
-    let baseId = baseObj.ID || baseObj.Id || baseObj.id || id;
-
-    if (itensSh) {
-      const itData = itensSh.getDataRange().getValues();
-      if (itData.length) {
-        itHeaders = itData[0].map(h => String(h||'').trim());
-        const itIdx = Object.fromEntries(itHeaders.map((h,i)=>[h,i]));
-
-        const linkIdx =
-          (itIdx['ID_RegistroBase'] != null) ? itIdx['ID_RegistroBase'] :
-          (itIdx['ID']              != null) ? itIdx['ID']              :
-          0;
-
-        // 1) tenta vínculo direto
-        for (let i=1;i<itData.length;i++){
-          if (String(itData[i][linkIdx]) === String(baseId)) {
-            const obj = {};
-            itHeaders.forEach((h,j)=> obj[h] = itData[i][j]);
-            itens.push(obj);
+      if (rowIndex < 0) {
+        outer:
+        for (let i=1;i<baseData.length;i++){
+          for (let j=0;j<baseHeaders.length;j++){
+            if (String(baseData[i][j]) === String(id)) { rowIndex = i; break outer; }
           }
         }
-        if (itens.length) matchedBy = 'link';
+      }
+      if (rowIndex < 0) return { ok:false, code:'NOT_FOUND', message:'Registro não encontrado na Base' };
 
-        // 2) fallback: vasculha todas as colunas (se nada encontrado)
-        if (itens.length === 0) {
+      const baseObj = {};
+      baseHeaders.forEach((h, j) => {
+        let v = baseData[rowIndex][j];
+        if (v instanceof Date) v = v.toISOString();
+        baseObj[h] = v;
+      });
+
+      // --- ITENS ---
+      const itensSh = ss.getSheetByName(SHEET_ITENS);
+      const itens = [];
+      let matchedBy = 'none';
+      let itHeaders = [];
+      const baseId = baseObj.ID || baseObj.Id || baseObj.id || id;
+
+      if (itensSh) {
+        const itData = itensSh.getDataRange().getValues();
+        if (itData.length) {
+          itHeaders = itData[0].map(h => String(h||'').trim());
+          const itIdx = Object.fromEntries(itHeaders.map((h,i)=>[h,i]));
+
+          const linkIdx =
+            (itIdx['ID_RegistroBase'] != null) ? itIdx['ID_RegistroBase'] :
+            (itIdx['ID']              != null) ? itIdx['ID']              :
+            0;
+
+          // 1) tenta vínculo direto
           for (let i=1;i<itData.length;i++){
-            for (let j=0;j<itHeaders.length;j++){
-              if (String(itData[i][j]) === String(baseId)) {
-                const obj = {};
-                itHeaders.forEach((h,k)=> obj[h] = itData[i][k]);
-                itens.push(obj);
-                break;
-              }
+            if (String(itData[i][linkIdx]) === String(baseId)) {
+              const obj = {};
+              itHeaders.forEach((h,j)=> obj[h] = itData[i][j]);
+              itens.push(obj);
             }
           }
-          if (itens.length) matchedBy = 'scan';
+          if (itens.length) matchedBy = 'link';
+
+          // 2) fallback: vasculha todas as colunas (se nada encontrado)
+          if (itens.length === 0) {
+            for (let i=1;i<itData.length;i++){
+              for (let j=0;j<itHeaders.length;j++){
+                if (String(itData[i][j]) === String(baseId)) {
+                  const obj = {};
+                  itHeaders.forEach((h,k)=> obj[h] = itData[i][k]);
+                  itens.push(obj);
+                  break;
+                }
+              }
+            }
+            if (itens.length) matchedBy = 'scan';
+          }
         }
       }
+
+      return {
+        ok: true,
+        base: baseObj,
+        itens: itens,
+        pastaDriveUrl: '',
+        debug: { baseId, matchedBy, itHeaders }
+      };
+
+    } catch (err) {
+      return { ok:false, code:'DETALHAR_ERROR', message:String(err && err.message || err) };
     }
-
-    return {
-      ok: true,
-      base: baseObj,
-      itens: itens,
-      pastaDriveUrl: '',
-      debug: { baseId, matchedBy, itHeaders }  // <— ajuda no console
-    };
-
-  } catch (err) {
-    return { ok:false, code:'DETALHAR_ERROR', message:String(err && err.message || err) };
   }
-}
 
 
 
@@ -351,6 +352,10 @@ function detalhar(id, userCode) {
     const baseSh  = ss.getSheetByName(SHEET_BASE);
     const itensSh = ss.getSheetByName(SHEET_ITENS);
 
+    if (!baseSh || !itensSh) {
+      throw new Error('Estrutura de planilha incompleta. Execute ensureSchema() para criar as abas.');
+    }
+
     const id = Utilities.getUuid();
     const folder = DriveApp.createFolder(id);
     const xmlUrl = folder.createFile('nota.xml', 'XML original não armazenado aqui.', MimeType.PLAIN_TEXT).getUrl();
@@ -373,6 +378,63 @@ function detalhar(id, userCode) {
 
     logAction(userCode, '', 'UPLOAD', id, '', 'Upload realizado');
     return id;
+  }
+
+  function salvarAnexo(e, userCode, userName) {
+    return {
+      ok: false,
+      code: 'NOT_IMPLEMENTED',
+      message: 'Funcionalidade de anexo não disponível nesta versão.'
+    };
+  }
+
+  function minhasAtividades(params, userCode) {
+    try {
+      const tipo = (params && params.type) || 'uploads';
+      const ss = getSpreadsheet();
+      const baseSh = ss.getSheetByName(SHEET_BASE);
+      if (!baseSh) return { ok: true, rows: [] };
+
+      const data = baseSh.getDataRange().getValues();
+      if (data.length < 2) return { ok: true, rows: [] };
+
+      const headers = data[0].map(h => String(h || '').trim());
+      const idx = Object.fromEntries(headers.map((h, i) => [h, i]));
+
+      const rows = [];
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const createdBy = String(row[idx['CriadoPorCode'] ?? -1] || '');
+        const validatedBy = String(row[idx['ValidadoPorCode'] ?? -1] || '');
+        const matchesUploads = tipo === 'uploads' && createdBy === String(userCode);
+        const matchesValidacoes = tipo === 'validacoes' && validatedBy === String(userCode);
+        if (!matchesUploads && !matchesValidacoes) continue;
+
+        const obj = {};
+        headers.forEach((h, j) => {
+          let value = row[j];
+          if (value instanceof Date) value = value.toISOString();
+          obj[h] = value;
+        });
+        rows.push(obj);
+      }
+
+      function toTimestamp(value) {
+        if (value instanceof Date) return value.getTime();
+        const parsed = Date.parse(value);
+        return isNaN(parsed) ? 0 : parsed;
+      }
+
+      rows.sort((a, b) => {
+        const aDate = a['AtualizadoEm'] || a['CriadoEm'] || '';
+        const bDate = b['AtualizadoEm'] || b['CriadoEm'] || '';
+        return toTimestamp(bDate) - toTimestamp(aDate);
+      });
+
+      return { ok: true, rows };
+    } catch (err) {
+      return { ok: false, code: 'MINHAS_ATIVIDADES_ERROR', message: String(err && err.message || err) };
+    }
   }
 
   // ------------- Log -------------
@@ -617,8 +679,13 @@ function dashboardPessoal(userCode, userName) {
     listar,
     detalhar,
     validar,
-      dashboard,     
-  dashboardPessoal,  
-    logAction
+    dashboard,
+    dashboardPessoal,
+    salvarAnexo,
+    minhasAtividades,
+    logAction,
+    // Helpers expostos para testes automatizados
+    parseXmlForTest: parseXml_,
+    saveRecordForTest: saveRecord_
   };
 })();

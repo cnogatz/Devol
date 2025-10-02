@@ -215,6 +215,64 @@ function apiVersionServer() {
   return { ok: true, version: WEBAPP_VERSION, ts: new Date().toISOString() };
 }
 
+function apiDashboardServer(pin) {
+  try {
+    if (!pin) {
+      return { ok: false, code: 'PIN_REQUIRED', message: 'PIN obrigatório' };
+    }
+    if (!Services || typeof Services.dashboard !== 'function') {
+      return { ok: false, code: 'MISSING_SERVICE', message: 'Services.dashboard não encontrado.' };
+    }
+    const session = Services.validarPIN(pin);
+    if (!session || session.ok !== true) {
+      return { ok: false, code: 'SESSION_INVALID', message: 'PIN inválido ou inativo.' };
+    }
+    return Services.dashboard({});
+  } catch (e) {
+    Logger.log('[apiDashboardServer][EXCEPTION] %s\n%s', e && e.message, e && e.stack);
+    return { ok: false, code: 'EXCEPTION', message: String(e && e.message || e) };
+  }
+}
+
+function apiDashboardPessoalServer(pin) {
+  try {
+    if (!pin) {
+      return { ok: false, code: 'PIN_REQUIRED', message: 'PIN obrigatório' };
+    }
+    if (!Services || typeof Services.dashboardPessoal !== 'function') {
+      return { ok: false, code: 'MISSING_SERVICE', message: 'Services.dashboardPessoal não encontrado.' };
+    }
+    const session = Services.validarPIN(pin);
+    if (!session || session.ok !== true) {
+      return { ok: false, code: 'SESSION_INVALID', message: 'PIN inválido ou inativo.' };
+    }
+    return Services.dashboardPessoal(pin, session.nome || '');
+  } catch (e) {
+    Logger.log('[apiDashboardPessoalServer][EXCEPTION] %s\n%s', e && e.message, e && e.stack);
+    return { ok: false, code: 'EXCEPTION', message: String(e && e.message || e) };
+  }
+}
+
+function apiMinhasAtividadesServer(tipo, pin) {
+  try {
+    if (!pin) {
+      return { ok: false, code: 'PIN_REQUIRED', message: 'PIN obrigatório' };
+    }
+    if (!Services || typeof Services.minhasAtividades !== 'function') {
+      return { ok: false, code: 'MISSING_SERVICE', message: 'Services.minhasAtividades não encontrado.' };
+    }
+    const session = Services.validarPIN(pin);
+    if (!session || session.ok !== true) {
+      return { ok: false, code: 'SESSION_INVALID', message: 'PIN inválido ou inativo.' };
+    }
+    const params = { type: tipo || 'uploads' };
+    return Services.minhasAtividades(params, pin, session.nome || '');
+  } catch (e) {
+    Logger.log('[apiMinhasAtividadesServer][EXCEPTION] %s\n%s', e && e.message, e && e.stack);
+    return { ok: false, code: 'EXCEPTION', message: String(e && e.message || e) };
+  }
+}
+
 function apiListarServer(pin) {
   try {
     if (!pin) return { ok:false, code:'PIN_REQUIRED', message:'PIN obrigatório' };
