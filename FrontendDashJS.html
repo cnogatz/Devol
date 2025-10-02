@@ -56,6 +56,7 @@
    * @param {object} data
    */
   function renderDashboard(container, data) {
+    // Evita crescimento infinito mantendo um container limpo
     container.innerHTML = '';
     if (!data || !data.ok) {
       container.textContent = data && data.message ? data.message : 'Erro ao carregar o dashboard.';
@@ -143,6 +144,7 @@
    * @param {object} data
    */
   function renderPersonalDashboard(container, data) {
+    // Evita crescimento infinito mantendo um container limpo
     container.innerHTML = '';
     if (!data || !data.ok) {
       container.textContent = data && data.message ? data.message : 'Erro ao carregar seu dashboard.';

@@ -32,7 +32,7 @@
             setUser(data.pin, data.nome || '');
             setMsg(msg, 'Bem-vindo, ' + (data.nome || 'usuário') + '!', 'ok');
             const login = $('#loginSection'); if (login) login.style.display = 'none';
-            showOnly('uploadSection');
+            showOnly('listaSection');
           } else {
             setMsg(msg, (data && data.message) || 'PIN inválido.', 'err');
           }
@@ -104,6 +104,12 @@
     btn.addEventListener('click', function(){
       const pin = getPIN();
       const table = $('#listaTable');
+      const params = {
+        emitente: ($('#fEmitente')?.value || ''),
+        status: ($('#fStatus')?.value || ''),
+        emissaoIni: ($('#fEmissaoIni')?.value || ''),
+        emissaoFim: ($('#fEmissaoFim')?.value || '')
+      };
       if (table) table.innerHTML = '<tr><td>Carregando...</td></tr>';
       if (!pin) { if (table) table.innerHTML = '<tr><td>Faça login primeiro.</td></tr>'; return; }
 
@@ -112,6 +118,13 @@
           if (!(data && data.ok)) {
             if (table) table.innerHTML = '<tr><td>Falha: ' + ((data && data.message) || (data && data.code) || 'erro') + '</td></tr>';
             return;
+          }
+
+          // Atualiza resumos no cabeçalho
+          if (data.summary) {
+            $('#totalNotas').textContent = data.summary.total || 0;
+            $('#pendentes').textContent = data.summary.pendentes || 0;
+            $('#recusadas').textContent = data.summary.recusadas || 0;
           }
 
           if (table) table.innerHTML = '<tr><th>Chave</th><th>Emissão</th><th>Emitente</th><th>Valor</th><th>Status</th><th>Ação</th></tr>';
@@ -157,7 +170,7 @@
           console.error('apiListarServer FAIL →', err);
           if (table) table.innerHTML = '<tr><td>Erro de conexão</td></tr>';
         })
-        .apiListarServer(pin);
+        .apiListarServerWithParams(params, pin);
     });
   }
 
@@ -326,10 +339,7 @@ function bindMenu(){
       const sectionName = btn.getAttribute('data-section');
       const target = sectionName + 'Section';
       showOnly(target);
-      // Se for o dashboard, atualiza os gráficos e indicadores
-      if (sectionName === 'dashboard' && typeof loadDashboards === 'function') {
-        loadDashboards();
-      }
+      // Seções removidas: dashboard e atividades
     });
   });
   const out = $('#btnLogout');
@@ -347,7 +357,9 @@ function bindMenu(){
     bindMenu();
     if (getPIN()){
       const login = $('#loginSection'); if (login) login.style.display = 'none';
-      showOnly('uploadSection');
+      showOnly('listaSection');
+      // Carrega a lista automaticamente
+      $('#btnAtualizarLista')?.click();
     } else {
       const login = $('#loginSection'); if (login) login.style.display = 'block';
       const menu = $('#menuSection'); if (menu) menu.style.display = 'none';

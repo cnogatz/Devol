@@ -267,6 +267,19 @@ function apiListarServer(pin) {
   }
 }
 
+function apiListarServerWithParams(params, pin) {
+  try {
+    if (!pin) return { ok:false, code:'PIN_REQUIRED', message:'PIN obrigatório' };
+    const out = Services.listar(params || {}, pin);
+    if (!out || out.ok !== true) {
+      return { ok:false, code:(out && out.code)||'LISTAR_FAIL', message:(out && out.message)||'Falha em Services.listar' };
+    }
+    return out;
+  } catch (e) {
+    return { ok:false, code:'EXCEPTION', message:String(e && e.message || e) };
+  }
+}
+
 function apiDetalharServer(id, pin) {
   try {
     Logger.log('[apiDetalharServer] id=%s pin=%s', id, pin);

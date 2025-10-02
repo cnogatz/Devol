@@ -171,5 +171,15 @@ th{
   table{background:#151923; color:var(--txt)}
   th, td{border-bottom-color:#2a2f3a; color:var(--txt)}
   th{background: var(--brand); color:#fff}
+  /* Garante que todos os inputs e selects tenham fundo escuro */
+  input[type="text"], input[type="number"], input[type="date"], input[type="file"], 
+  select, textarea, .qtdeDev, .obsItem, .statusItem, .motivoItem {
+    background:#0f1115 !important; 
+    color:var(--txt) !important; 
+    border-color:#2a2f3a !important;
+  }
+  input[type="text"]::placeholder, textarea::placeholder {
+    color:#9aa1ac !important;
+  }
 }
 </style>

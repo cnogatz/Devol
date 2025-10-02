@@ -111,12 +111,49 @@ const Services = (function () {
         if (Object.values(r).some(v => v !== '' && v !== null && v !== undefined)) rows.push(r);
       }
 
+      // --- Filtros ---
+      const emitente = String(params && params.emitente || '').toLowerCase();
+      const status   = String(params && params.status   || '').toLowerCase();
+      const emiIni   = String(params && params.emissaoIni || '');
+      const emiFim   = String(params && params.emissaoFim || '');
+
+      const filtered = rows.filter(r => {
+        // Restringe ao PIN do usuário
+        if (userCode && String(r['CriadoPorCode'] || '') !== String(userCode)) return false;
+        if (emitente && String(r['Emitente_Nome'] || '').toLowerCase().indexOf(emitente) === -1) return false;
+        if (status && String(r['Status'] || '').toLowerCase() !== status) return false;
+        if (emiIni || emiFim) {
+          const raw = r['Emissao'];
+          let iso;
+          if (raw instanceof Date) {
+            iso = raw.toISOString().slice(0,10);
+          } else {
+            try { 
+              const dt = new Date(raw); 
+              if (!isNaN(dt.getTime())) iso = dt.toISOString().slice(0,10); 
+            } catch(e){}
+          }
+          if (!iso) return false;
+          if (emiIni && iso < emiIni) return false;
+          if (emiFim && iso > emiFim) return false;
+        }
+        return true;
+      });
+
       const pageSize = params && params.pageSize ? parseInt(params.pageSize,10) : 20;
       const page     = params && params.page     ? parseInt(params.page,10)     : 1;
-      const total    = rows.length;
+      const total    = filtered.length;
       const start    = Math.max(0, (page-1)*pageSize);
       const end      = Math.min(start + pageSize, total);
-      return { ok:true, rows: rows.slice(start, end), page, pageSize, total };
+      
+      // Calcula resumos para o cabeçalho
+      const summary = {
+        total: filtered.length,
+        pendentes: filtered.filter(r => String(r['Status'] || '').toLowerCase() === 'pendente').length,
+        recusadas: filtered.filter(r => String(r['Status'] || '').toLowerCase() === 'recusada').length
+      };
+      
+      return { ok:true, rows: filtered.slice(start, end), page, pageSize, total, summary };
     } catch (err) {
       return { ok:false, code:'LISTAR_ERROR', message:String(err && err.message || err) };
     }
@@ -381,6 +418,20 @@ function detalhar(id, userCode) {
     const ss = getSpreadsheet();
     const baseSh  = ss.getSheetByName(SHEET_BASE);
     const itensSh = ss.getSheetByName(SHEET_ITENS);
+
+    // Verifica se já existe uma nota com a mesma chave
+    const existingData = baseSh.getDataRange().getValues();
+    if (existingData.length > 1) {
+      const headers = existingData[0].map(h => String(h||'').trim());
+      const chaveIdx = headers.indexOf('ChaveNFe');
+      if (chaveIdx >= 0) {
+        for (let i = 1; i < existingData.length; i++) {
+          if (String(existingData[i][chaveIdx]) === String(base.chaveNFe)) {
+            throw new Error(`Nota já existe na base: ${base.chaveNFe}`);
+          }
+        }
+      }
+    }
 
     const id = Utilities.getUuid();
     const folder = DriveApp.createFolder(id);

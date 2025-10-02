@@ -22,8 +22,6 @@
       <div id="menuSection" style="display:none; margin-top:20px;">
         <button data-section="upload">Upload</button>
         <button data-section="lista">Lista</button>
-        <button data-section="dashboard">Dashboard</button>
-        <button data-section="atividades">Minhas Atividades</button>
         <button id="btnLogout" type="button" style="float:right;">Sair</button>
       </div>
 
@@ -41,29 +39,47 @@
       <!-- Seção de Lista -->
       <div id="listaSection" class="pageSection" style="display:none;">
         <h3>Lista de notas</h3>
-        <button id="btnAtualizarLista" type="button">Atualizar Lista</button>
+        
+        <!-- Resumos no cabeçalho -->
+        <div class="row cols-3" style="margin:12px 0; gap:12px;">
+          <div style="background:var(--info); color:white; padding:12px; border-radius:8px; text-align:center;">
+            <div style="font-size:1.5em; font-weight:bold;" id="totalNotas">-</div>
+            <div>Total de Notas</div>
+          </div>
+          <div style="background:var(--brand); color:white; padding:12px; border-radius:8px; text-align:center;">
+            <div style="font-size:1.5em; font-weight:bold;" id="pendentes">-</div>
+            <div>Pendentes</div>
+          </div>
+          <div style="background:var(--danger); color:white; padding:12px; border-radius:8px; text-align:center;">
+            <div style="font-size:1.5em; font-weight:bold;" id="recusadas">-</div>
+            <div>Recusadas</div>
+          </div>
+        </div>
+        
+        <div class="row cols-3" style="margin:8px 0;">
+          <label>Emitente
+            <input id="fEmitente" type="text" placeholder="Nome do emitente">
+          </label>
+          <label>Status
+            <select id="fStatus">
+              <option value="">(todos)</option>
+              <option>Pendente</option>
+              <option>Aceita</option>
+              <option>Recusada</option>
+            </select>
+          </label>
+          <label>Emissão (início)
+            <input id="fEmissaoIni" type="date">
+          </label>
+          <label>Emissão (fim)
+            <input id="fEmissaoFim" type="date">
+          </label>
+        </div>
+        <button id="btnAtualizarLista" type="button">Filtrar / Atualizar</button>
         <table id="listaTable"></table>
       </div>
 
-      <!-- Seção de Dashboard -->
-      <div id="dashboardSection" class="pageSection" style="display:none;">
-        <h3>Dashboard Geral</h3>
-        <div style="margin-bottom:8px; display:flex; gap:8px; flex-wrap:wrap;">
-          <button id="dashRefreshBtn" type="button">Atualizar Dashboard</button>
-          <button id="dashExportCsvBtn" type="button">Exportar CSV (Resumo)</button>
-        </div>
-        <div id="dashboardContent"></div>
-        <h3>Meu Dashboard</h3>
-        <div id="dashboardPessoalContent"></div>
-      </div>
-
-      <!-- Seção de Minhas Atividades -->
-      <div id="atividadesSection" class="pageSection" style="display:none;">
-        <h3>Minhas Atividades</h3>
-        <button data-type="uploads" type="button">Meus Uploads</button>
-        <button data-type="validacoes" type="button">Minhas Validações</button>
-        <table id="atividadesTable"></table>
-      </div>
+      <!-- Seções removidas: Dashboard e Minhas Atividades -->
     </div>
 
 
