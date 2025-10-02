@@ -18,6 +18,23 @@ const Services = (function () {
     return [H, Object.fromEntries(H.map((h, i) => [h, i]))];
   }
 
+  function normalizeValue_(value) {
+    if (value instanceof Date) {
+      try {
+        const tz = Session.getScriptTimeZone ? Session.getScriptTimeZone() : 'GMT';
+        return Utilities.formatDate(value, tz, "dd/MM/yyyy HH:mm:ss");
+      } catch (err) {
+        try {
+          return value.toISOString();
+        } catch (err2) {
+          return String(value);
+        }
+      }
+    }
+    if (value === null || value === undefined) return '';
+    return value;
+  }
+
   // ------------- Params -------------
   function getParam(param) {
     const cache = CacheService.getScriptCache();
@@ -103,9 +120,7 @@ const Services = (function () {
       for (let i = 1; i < data.length; i++) {
         const r = {};
         headers.forEach((h, j) => {
-          let v = data[i][j];
-          if (v instanceof Date) v = v.toISOString();
-          r[h] = v;
+          r[h] = normalizeValue_(data[i][j]);
         });
         // ignora linha 100% vazia
         if (Object.values(r).some(v => v !== '' && v !== null && v !== undefined)) rows.push(r);
@@ -158,9 +173,7 @@ const Services = (function () {
 
       const baseObj = {};
       baseHeaders.forEach((h, j) => {
-        let v = baseData[rowIndex][j];
-        if (v instanceof Date) v = v.toISOString();
-        baseObj[h] = v;
+        baseObj[h] = normalizeValue_(baseData[rowIndex][j]);
       });
 
       // --- ITENS ---
@@ -185,7 +198,7 @@ const Services = (function () {
           for (let i=1;i<itData.length;i++){
             if (String(itData[i][linkIdx]) === String(baseId)) {
               const obj = {};
-              itHeaders.forEach((h,j)=> obj[h] = itData[i][j]);
+              itHeaders.forEach((h,j)=> obj[h] = normalizeValue_(itData[i][j]));
               itens.push(obj);
             }
           }
@@ -197,7 +210,7 @@ const Services = (function () {
               for (let j=0;j<itHeaders.length;j++){
                 if (String(itData[i][j]) === String(baseId)) {
                   const obj = {};
-                  itHeaders.forEach((h,k)=> obj[h] = itData[i][k]);
+                  itHeaders.forEach((h,k)=> obj[h] = normalizeValue_(itData[i][k]));
                   itens.push(obj);
                   break;
                 }
