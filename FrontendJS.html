@@ -127,7 +127,7 @@
             $('#recusadas').textContent = data.summary.recusadas || 0;
           }
 
-          if (table) table.innerHTML = '<tr><th>Chave</th><th>Emissão</th><th>Emitente</th><th>Valor</th><th>Status</th><th>Ação</th></tr>';
+          if (table) table.innerHTML = '<tr><th>Chave</th><th>Emissão</th><th>Emitente</th><th>Valor</th><th>Status</th><th>Tempo sem lançamento</th><th>Ação</th></tr>';
           (data.rows || []).forEach(function (r) {
             const tr = document.createElement('tr');
 
@@ -143,12 +143,24 @@
               '';
 
             const emissao = (r.Emissao instanceof Date) ? r.Emissao.toISOString() : (r.Emissao || '');
+            const status = String(r.Status || '');
+            const tempoHoras = Number(r.TempoSemLancamentoHoras);
+            let tempoDisplay = '';
+            if (status.toLowerCase() === 'pendente' && isFinite(tempoHoras) && tempoHoras >= 0) {
+              if (tempoHoras >= 24) {
+                const dias = tempoHoras / 24;
+                tempoDisplay = dias >= 1 ? `${dias.toFixed(dias >= 10 ? 0 : 1)} dia${dias >= 2 ? 's' : ''}` : '';
+              } else {
+                tempoDisplay = `${tempoHoras.toFixed(tempoHoras >= 10 ? 0 : 1)} hora${tempoHoras >= 2 ? 's' : ''}`;
+              }
+            }
             tr.innerHTML = `
               <td>${r.ChaveNFe||''}</td>
               <td>${emissao}</td>
               <td>${r.Emitente_Nome||''}</td>
               <td>${r.ValorNF||''}</td>
-              <td>${r.Status||''}</td>
+              <td>${status}</td>
+              <td>${tempoDisplay}</td>
               <td><button class="btnDetalhar" type="button" data-id="${recId}">Detalhar</button></td>`;
             table.appendChild(tr);
           });

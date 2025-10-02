@@ -107,8 +107,31 @@ const Services = (function () {
           if (v instanceof Date) v = v.toISOString();
           r[h] = v;
         });
-        // ignora linha 100% vazia
-        if (Object.values(r).some(v => v !== '' && v !== null && v !== undefined)) rows.push(r);
+
+        const hasContent = Object.values(r).some(v => v !== '' && v !== null && v !== undefined);
+        if (!hasContent) continue;
+
+        const statusStr = String(r['Status'] || '').toLowerCase();
+        if (statusStr === 'pendente') {
+          const parseDate = (raw) => {
+            if (!raw) return null;
+            if (raw instanceof Date) return raw;
+            const d = new Date(raw);
+            return isNaN(d.getTime()) ? null : d;
+          };
+          const atual = parseDate(r['AtualizadoEm']);
+          const criado = parseDate(r['CriadoEm']);
+          const refDate = atual || criado;
+          if (refDate) {
+            const diffMs = Date.now() - refDate.getTime();
+            if (diffMs >= 0) {
+              const diffHoras = diffMs / (1000 * 60 * 60);
+              r['TempoSemLancamentoHoras'] = diffHoras;
+            }
+          }
+        }
+
+        rows.push(r);
       }
 
       // --- Filtros ---
