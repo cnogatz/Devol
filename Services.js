@@ -161,6 +161,12 @@ function detalhar(id, userCode) {
   if (v instanceof Date) v = v.toISOString();
   baseObj[h] = v;
 });
+    // e, se houver datas em itens:
+itens.forEach(item => {
+  Object.keys(item).forEach(k => {
+    if (item[k] instanceof Date) item[k] = item[k].toISOString();
+  });
+});
 
     // --- ITENS ---
     const itensSh = ss.getSheetByName(SHEET_ITENS);
